@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mouse Wheel Detect</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #wheel-area {
+            width: 80%;
+            height: 200px;
+            border: 2px dashed #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        #chart {
+            width: 80%;
+            height: 300px;
+            position: relative;
+            border: 1px solid #ccc;
+            overflow: hidden;
+            display: flex;
+            align-items: center; /* Center vertically */
+        }
+        .bar {
+            position: absolute;
+            width: 10px;
+        }
+        .bar.up {
+            background-color: blue;
+            bottom: 50%;
+        }
+        .bar.down {
+            background-color: red;
+            top: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div id="wheel-area">Scroll your mouse wheel here</div>
+    <div id="chart"></div>
+
+    <script>
+        const wheelArea = document.getElementById('wheel-area');
+        const chart = document.getElementById('chart');
+        let barIndex = 0;
+
+        wheelArea.addEventListener('wheel', (event) => {
+            const bar = document.createElement('div');
+            bar.classList.add('bar');
+            bar.style.left = `${barIndex * 12}px`;
+            bar.style.height = `${Math.abs(event.deltaY)}px`;
+
+            if (event.deltaY < 0) {
+                bar.classList.add('up');
+            } else {
+                bar.classList.add('down');
+            }
+
+            chart.appendChild(bar);
+            barIndex++;
+
+            // Remove the first bar if the chart is full
+            if (barIndex * 12 > chart.offsetWidth) {
+                chart.removeChild(chart.firstChild);
+                // Adjust all bars' positions
+                Array.from(chart.children).forEach((child, index) => {
+                    child.style.left = `${index * 12}px`;
+                });
+                barIndex--;
+            }
+        });
+    </script>
+</body>
+</html>
