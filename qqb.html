@@ -114,8 +114,8 @@
 
         .instructs-btn {
             position: absolute;
-            top: 10px;
-            right: 110px;
+            top: 70px;
+            right: 10px;
             padding: 10px 15px;
             font-size: 16px;
             cursor: pointer;
@@ -196,6 +196,7 @@
 			// console.log('ok start');
                         startX = e.touches[0].clientX;
                         startY = e.touches[0].clientY;
+			ev.preventDefault();
 		    };
 		    var androidDragMove = function(e) {
                         var dx = e.touches[0].clientX - startX;
@@ -207,15 +208,17 @@
 			snapInvMatrix.e = snapInvMatrix.f = 0;
 			tdx = snapInvMatrix.x( dx,dy ); tdy = snapInvMatrix.y( dx,dy );
 			target.transform( "t" + [ tdx, tdy ] + target.data('ot')  );
+			ev.preventDefault();
 			// console.log(`ok moved ${tdx} ${tdy}`);
 		    };
 		    var androidDragEnd =  function(e) {
 			target.data('ot', target.transform().local );
+			ev.preventDefault();
 			// console.log('ok end');
 		    };
-		    this.node.addEventListener('touchstart', androidDragStart);
-		    this.node.addEventListener('touchmove', androidDragMove);
-		    this.node.addEventListener('touchend', androidDragEnd);
+		    this.node.addEventListener('touchstart', androidDragStart, { passive: false });
+		    this.node.addEventListener('touchmove', androidDragMove, { passive: false });
+		    this.node.addEventListener('touchend', androidDragEnd, { passive: false });
 		}
                 return this;
             }
@@ -500,7 +503,10 @@
 
         // 显示浮动按钮
         function showFloatingButtons(shape) {
-	    $('#rotation-slider-container').hide();
+	    if (isAndroid()) {
+		return;
+	    }
+	    // $('#rotation-slider-container').hide();
             var center = getCurrentCenter(shape);
             var floatingButtons = $('#floating-buttons');
             
