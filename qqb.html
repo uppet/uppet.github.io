@@ -180,9 +180,43 @@
     </div>
     
     <script>
+      function isAndroid() {
+         return /Android/i.test(navigator.userAgent);
+      }
         Snap.plugin( function( Snap, Element, Paper, global ) {
             Element.prototype.altDrag = function() {
                 this.drag( dragMove, dragStart, dragEnd );
+		if (isAndroid()) {
+		    let startX = 0;
+		    let startY = 0;
+		    let target = this;
+
+		    var androidDragStart = function(e) {
+			target.data('ot', target.transform().local );
+			// console.log('ok start');
+                        startX = e.touches[0].clientX;
+                        startY = e.touches[0].clientY;
+		    };
+		    var androidDragMove = function(e) {
+                        var dx = e.touches[0].clientX - startX;
+                        var dy = e.touches[0].clientY - startY;
+                        // startX = e.touches[0].clientX;
+                        // startY = e.touches[0].clientY;
+			var tdx, tdy;
+			var snapInvMatrix = target.transform().diffMatrix.invert();
+			snapInvMatrix.e = snapInvMatrix.f = 0;
+			tdx = snapInvMatrix.x( dx,dy ); tdy = snapInvMatrix.y( dx,dy );
+			target.transform( "t" + [ tdx, tdy ] + target.data('ot')  );
+			// console.log(`ok moved ${tdx} ${tdy}`);
+		    };
+		    var androidDragEnd =  function(e) {
+			target.data('ot', target.transform().local );
+			// console.log('ok end');
+		    };
+		    this.node.addEventListener('touchstart', androidDragStart);
+		    this.node.addEventListener('touchmove', androidDragMove);
+		    this.node.addEventListener('touchend', androidDragEnd);
+		}
                 return this;
             }
 
@@ -196,6 +230,7 @@
                 snapInvMatrix.e = snapInvMatrix.f = 0;
                 tdx = snapInvMatrix.x( dx,dy ); tdy = snapInvMatrix.y( dx,dy );
                 this.transform( "t" + [ tdx, tdy ] + this.data('ot')  );
+		// console.log(`pc moved ${tdx} ${tdy}`);
             }
 
             var dragEnd = function() {
@@ -365,6 +400,9 @@
                 }
             });
             shape.touchstart(function() {
+		if (isAndroid()) {
+		    return;
+		}
                 if (selectedShape === shape) {
                     deselectShape();
                 } else {
