@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>七巧板模拟</title>
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: #f0f0f0;
+            color: #333;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        .instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 10;
+        }
+        .draggable {
+            cursor: move;
+            stroke: black;
+            stroke-width: 1;
+        }
+        svg {
+            width: 100vw;
+            height: 100vh;
+            background: #fff;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 10px;
+            display: none;
+            z-index: 10;
+        }
+        .controls button {
+            margin: 5px;
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .selected {
+            stroke: red;
+            stroke-width: 3;
+        }
+        /* 浮动按钮样式 */
+        .floating-buttons {
+            position: absolute;
+            display: none;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 5px;
+            padding: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            z-index: 20;
+        }
+        .floating-buttons button {
+            margin: 2px 0;
+            padding: 5px 10px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 3px;
+            background: #4CAF50;
+            color: white;
+            width: 40px;
+            text-align: center;
+        }
+        .floating-buttons button:hover {
+            background: #45a049;
+        }
+        /* 旋转滑杆样式 */
+        .rotation-slider-container {
+            /* position: absolute;*/
+            /* display: none;*/
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            z-index: 20;
+        }
+        #rotation-slider {
+            width: 250px;
+            margin-right: 10px;
+        }
+        /* 新组按钮样式 */
+        .new-group-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            z-index: 10;
+        }
+        .new-group-btn:hover {
+            background: #0b7dda;
+        }
+
+        .instructs-btn {
+            position: absolute;
+            top: 10px;
+            right: 110px;
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            z-index: 10;
+        }
+        .instructs-btn:hover {
+            background: #0b7dda;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/snap.svg/0.4.1/snap.svg-min.js"></script>
+</head>
+<body>
+    <button class="new-group-btn" id="new-group-btn">新组</button>
+    <button class="instructs-btn" id="instructs-btn">说明</button>
+    <div class="instructions" id="instructions">
+        <h3>操作说明：</h3>
+        <ol>
+            <li>拖拽形状来移动</li>
+            <li>点击形状选中，显示控制按钮</li>
+            <li>使用按钮旋转或翻转</li>
+            <li>再次点击形状或空白取消选中</li>
+            <li>点击"新组"按钮添加一组新的七巧板</li>
+        </ol>
+    </div>
+    <svg viewBox="0 0 1500 1500">
+        <g id="piece1" class="draggable"><polygon points="250,250 350,350 150,350" style="fill: #ff0000"/></g>
+        <g id="piece2" class="draggable"><polygon points="250,250 150,150 150,350" style="fill: #00ff00"/></g>
+        <g id="piece3" class="draggable"><polygon points="250,150 150,150 200,200 300,200" style="fill: #0000ff"/></g>
+        <g id="piece4" class="draggable"><polygon points="300,200 250,250 200,200" style="fill: #ffff00"/></g>
+        <g id="piece5" class="draggable"><polygon points="250,150 350,150 350,250" style="fill: #ff00ff"/></g>
+        <g id="piece6" class="draggable"><polygon points="300,200 250,250 300,300 350,250" style="fill: #00ffff"/></g>
+        <g id="piece7" class="draggable"><polygon points="300,300 350,350 350,250" style="fill: #ffa500"/></g>
+    </svg>
+    <div class="controls" id="controls">
+        <button id="rotate-left">左 ( -5° )</button>
+        <button id="rotate-right">右 ( +5° )</button>
+        <button id="flip-horizontal">水平翻转</button>
+        <button id="flip-vertical">垂直翻转</button>
+	<button id="kill">X</button>
+	<button id="s1">S1</button>
+	<button id="s2">S2</button>
+	<button id="s3">S3</button>
+    <!-- 旋转角度滑杆 -->
+    <div class="rotation-slider-container" id="rotation-slider-container">
+        <input type="range" id="rotation-slider" min="-180" max="180" value="0">
+        <span id="rotation-value">0°</span>
+    </div>
+
+
+    </div>
+    
+    <!-- 浮动按钮容器 -->
+    <div class="floating-buttons" id="floating-buttons">
+        <button id="float-rotate-right">↻</button>
+        <button id="float-flip-vertical">⇅</button>
+        <button id="float-rotate-left">↺</button>
+    </div>
+    
+    <script>
+        Snap.plugin( function( Snap, Element, Paper, global ) {
+            Element.prototype.altDrag = function() {
+                this.drag( dragMove, dragStart, dragEnd );
+                return this;
+            }
+
+            var dragStart = function ( x,y,ev ) {
+                this.data('ot', this.transform().local );
+            }
+
+            var dragMove = function(dx, dy, ev, x, y) {
+                var tdx, tdy;
+                var snapInvMatrix = this.transform().diffMatrix.invert();
+                snapInvMatrix.e = snapInvMatrix.f = 0;
+                tdx = snapInvMatrix.x( dx,dy ); tdy = snapInvMatrix.y( dx,dy );
+                this.transform( "t" + [ tdx, tdy ] + this.data('ot')  );
+            }
+
+            var dragEnd = function() {
+		this.data('ot', this.transform().local );
+            }
+        });
+
+        // 保存每个形状的原始创建位置中心点
+        var creationCenters = {};
+        
+        // 保存每个形状的当前位置中心点（基于原始中心点和变换）
+        var currentCenters = {};
+        
+        // 记录形状创建时的中心点
+        function recordCreationCenter(shape, centerX, centerY) {
+            var id = shape.node.id;
+            creationCenters[id] = {
+                x: centerX,
+                y: centerY
+            };
+            
+            // 初始时当前中心点与创建中心点相同
+            currentCenters[id] = {
+                x: centerX,
+                y: centerY
+            };
+        }
+        
+        // 获取形状创建时的中心点
+        function getCreationCenter(shape) {
+            var id = shape.node.id;
+            return creationCenters[id] || {x: 250, y: 250}; // 默认中心点
+        }
+        
+        // 更新形状的当前中心点
+        function updateCurrentCenter(shape) {
+            var id = shape.node.id;
+            var creationCenter = creationCenters[id];
+            if (creationCenter) {
+                var currentTransform = shape.transform().localMatrix;
+                
+                // 计算创建中心点经过变换后的位置
+                var newX = currentTransform.x(creationCenter.x, creationCenter.y);
+                var newY = currentTransform.y(creationCenter.x, creationCenter.y);
+                
+                currentCenters[id] = {
+                    x: newX,
+                    y: newY
+                };
+            }
+        }
+        
+        // 获取形状的当前中心点
+        function getCurrentCenter(shape) {
+            var id = shape.node.id;
+            updateCurrentCenter(shape);
+            return currentCenters[id] || {x: 250, y: 250}; // 默认中心点
+        }
+
+        // 添加围绕创建中心点旋转和翻转的函数
+        Snap.plugin( function( Snap, Element, Paper, global ) {
+            // 围绕创建中心点旋转
+            Element.prototype.rotateAtCenter = function( degrees ) {
+                // 获取形状创建时的中心点
+                var creationCenter = getCreationCenter(this);
+                
+                // 保存当前的变换
+                var currentTransform = this.transform().local;
+                
+                // 创建新的变换：先平移到创建中心点，旋转，再平移回来
+                var transform = "r" + degrees;
+                
+                // 应用变换
+		this.transform(transform);
+		var rotated =  this.transform().local;
+		this.transform(currentTransform + rotated);
+                // return this.transform(transform + currentTransform);
+            };
+            
+            // 围绕创建中心点水平翻转
+            Element.prototype.flipHorizontalAtCenter = function() {
+                // 获取形状创建时的中心点
+                var creationCenter = getCreationCenter(this);
+                
+                var childSnap = Snap(this.node.children[0])
+                // 保存当前的变换
+                var currentTransform = childSnap.transform().local;
+                
+                // 创建新的变换：先平移到创建中心点，垂直翻转，再平移回来
+                var transform = "s" + [1, -1];
+                
+                // 应用变换
+                return childSnap.transform(currentTransform + transform);
+            };
+            
+            // 围绕创建中心点垂直翻转
+            Element.prototype.flipVerticalAtCenter = function() {
+                // 获取形状创建时的中心点
+                var creationCenter = getCreationCenter(this);
+                
+                var childSnap = Snap(this.node.children[0])
+                // 保存当前的变换
+                var currentTransform = childSnap.transform().local;
+                
+                // 创建新的变换：先平移到创建中心点，垂直翻转，再平移回来
+                var transform = "s" + [-1, 1];
+                
+                // 应用变换
+                return childSnap.transform(currentTransform + transform);
+            };
+        });
+
+        // Enable drag for each piece
+        var selectedShape = null;
+        var currentGroupId = 1;
+        var allPieces = [];
+        
+        // 初始七巧板
+        initializePieces(1);
+        
+        // 初始化指定组的七巧板
+        function initializePieces(groupId) {
+            var pieces = [];
+            var offsetX = (groupId - 1) * 50;  // 每组偏移一定距离
+            var offsetY = 0;
+            
+            if (groupId > 5) {
+                offsetX = (groupId - 5) * 50;
+                offsetY = 50;
+            }
+            
+            if (groupId === 1) {
+                // 第一组使用原始ID格式
+                pieces = ['piece1', 'piece2', 'piece3', 'piece4', 'piece5', 'piece6', 'piece7'];
+                
+                // 为第一组七巧板记录创建中心点
+                recordCreationCenter(Snap('#piece1'), 250, 300);
+                recordCreationCenter(Snap('#piece2'), 200, 250);
+                recordCreationCenter(Snap('#piece3'), 200, 175);
+                recordCreationCenter(Snap('#piece4'), 250, 200);
+                recordCreationCenter(Snap('#piece5'), 300, 200);
+                recordCreationCenter(Snap('#piece6'), 300, 250);
+                recordCreationCenter(Snap('#piece7'), 325, 300);
+            } else {
+                // 其他组使用带组号的ID格式
+                var baseId = 'piece' + groupId + '_';
+                pieces = [baseId + '1', baseId + '2', baseId + '3', baseId + '4', baseId + '5', baseId + '6', baseId + '7'];
+            }
+            
+            pieces.forEach(function(id) {
+                var shape = Snap('#' + id);
+                if (shape) {  // 仅处理已存在的七巧板
+                    shape.altDrag();
+                    setupPieceEvents(shape);
+                    allPieces.push(shape);
+                }
+            });
+        }
+        
+        // 为七巧板元素设置事件
+        function setupPieceEvents(shape) {
+            shape.click(function() {
+                if (selectedShape === shape) {
+                    deselectShape();
+                } else {
+                    selectShape(shape);
+                }
+            });
+            shape.touchstart(function() {
+                if (selectedShape === shape) {
+                    deselectShape();
+                } else {
+                    selectShape(shape);
+                }
+            });
+        }
+
+        function hideInstruct() {
+	    $('#instructions').toggle();
+        }
+        
+        // 添加新组七巧板
+        function addNewGroup() {
+            currentGroupId++;
+            var baseId = 'piece' + currentGroupId + '_';
+            var svg = Snap('svg');
+            var offsetX = (currentGroupId - 1) * 50;  // 每组偏移一定距离
+            var offsetY = 0;
+            
+            if (currentGroupId > 5) {
+                offsetX = (currentGroupId - 5) * 50;
+                offsetY = 50;
+            }
+            
+            // 创建新的七巧板形状，复制原始形状的属性
+            var newPieces = [
+		svg.g(svg.polygon(250 + offsetX, 250 + offsetY, 350 + offsetX, 350 + offsetY, 150 + offsetX, 350 + offsetY)).attr({id: baseId + '1', class: 'draggable', fill: '#ff0000'}),
+                svg.g(svg.polygon(250 + offsetX, 250 + offsetY, 150 + offsetX, 150 + offsetY, 150 + offsetX, 350 + offsetY)).attr({id: baseId + '2', class: 'draggable', fill: '#00ff00'}),
+                svg.g(svg.polygon(250 + offsetX, 150 + offsetY, 150 + offsetX, 150 + offsetY, 200 + offsetX, 200 + offsetY, 300 + offsetX, 200 + offsetY)).attr({id: baseId + '3', class: 'draggable', fill: '#0000ff'}),
+                svg.g(svg.polygon(300 + offsetX, 200 + offsetY, 250 + offsetX, 250 + offsetY, 200 + offsetX, 200 + offsetY)).attr({id: baseId + '4', class: 'draggable', fill: '#ffff00'}),
+                svg.g(svg.polygon(250 + offsetX, 150 + offsetY, 350 + offsetX, 150 + offsetY, 350 + offsetX, 250 + offsetY)).attr({id: baseId + '5', class: 'draggable', fill: '#ff00ff'}),
+                svg.g(svg.polygon(300 + offsetX, 200 + offsetY, 250 + offsetX, 250 + offsetY, 300 + offsetX, 300 + offsetY, 350 + offsetX, 250 + offsetY)).attr({id: baseId + '6', class: 'draggable', fill: '#00ffff'}),
+                svg.g(svg.polygon(300 + offsetX, 300 + offsetY, 350 + offsetX, 350 + offsetY, 350 + offsetX, 250 + offsetY)).attr({id: baseId + '7', class: 'draggable', fill: '#ffa500'})
+            ];
+            
+            // 记录新创建七巧板的中心点
+            recordCreationCenter(newPieces[0], 250 + offsetX, 300 + offsetY);
+            recordCreationCenter(newPieces[1], 200 + offsetX, 250 + offsetY);
+            recordCreationCenter(newPieces[2], 200 + offsetX, 175 + offsetY);
+            recordCreationCenter(newPieces[3], 250 + offsetX, 200 + offsetY);
+            recordCreationCenter(newPieces[4], 300 + offsetX, 200 + offsetY);
+            recordCreationCenter(newPieces[5], 300 + offsetX, 250 + offsetY);
+            recordCreationCenter(newPieces[6], 325 + offsetX, 300 + offsetY);
+            
+            // 为新创建的七巧板添加拖动和点击事件
+            newPieces.forEach(function(shape) {
+                shape.altDrag();
+                setupPieceEvents(shape);
+                allPieces.push(shape);
+            });
+            
+            // 自动选中第一个新板块
+            selectShape(newPieces[0]);
+        }
+        
+        // 新组按钮点击事件
+        $('#new-group-btn').click(function(e) {
+            e.stopPropagation(); // 阻止事件冒泡，避免取消选择
+            addNewGroup();
+        });
+
+        $('#instructs-btn').click(function(e) {
+            hideInstruct();
+        });
+
+        // Click on SVG to deselect
+        $('svg').click(function(e) {
+            if (e.target.tagName === 'svg') {
+                deselectShape();
+            }
+        });
+
+        function selectShape(shape) {
+            if (selectedShape) {
+                selectedShape.removeClass('selected');
+            }
+            selectedShape = shape;
+            selectedShape.addClass('selected');
+            $('#controls').show();
+            showFloatingButtons(shape);
+
+            showRotationSlider(shape);
+        }
+
+        function deselectShape() {
+            if (selectedShape) {
+                selectedShape.removeClass('selected');
+                selectedShape = null;
+                $('#controls').hide();
+                hideFloatingButtons();
+                hideRotationSlider();
+            }
+        }
+
+        // 显示浮动按钮
+        function showFloatingButtons(shape) {
+	    $('#rotation-slider-container').hide();
+            var center = getCurrentCenter(shape);
+            var floatingButtons = $('#floating-buttons');
+            
+            // 计算按钮位置，显示在板块右侧
+            var svgElement = $('svg');
+            var svgRect = svgElement[0].getBoundingClientRect();
+            var scaleX = svgRect.width / 500; // viewBox宽度为500
+            var scaleY = svgRect.height / 500; // viewBox高度为500
+            
+            // 获取按钮组的实际尺寸
+            var buttonHeight = floatingButtons.outerHeight() || 90; // 默认90px作为后备值
+            
+            var x = (center.x + 30) * scaleX + svgRect.left; // 在中心右侧30个单位
+            var y = (center.y - buttonHeight / 2) * scaleY + svgRect.top; // 垂直居中
+            
+            // 确保按钮不会超出视口
+            var viewportWidth = $(window).width();
+            var viewportHeight = $(window).height();
+            var buttonWidth = floatingButtons.outerWidth() || 50; // 默认50px作为后备值
+            
+            if (x + buttonWidth > viewportWidth) {
+                x = (center.x - 30 - buttonWidth) * scaleX + svgRect.left; // 如果右侧不够，显示在左侧
+            }
+            
+            if (y < 0) y = 0;
+            if (y + buttonHeight > viewportHeight) {
+                y = viewportHeight - buttonHeight;
+            }
+            
+            floatingButtons.css({
+                left: x + 'px',
+                top: y + 'px',
+                display: 'flex'
+            });
+        }
+
+        // 隐藏浮动按钮
+        function hideFloatingButtons() {
+            $('#floating-buttons').hide();
+        }
+
+        // Control buttons
+        $('#rotate-left').click(function() {
+            if (selectedShape) {
+                // 应用旋转
+                selectedShape.rotateAtCenter(-5);
+                
+                // 更新保存的旋转角度
+                var id = selectedShape.node.id;
+                currentRotations[id] = (currentRotations[id] || 0) - 5;
+                
+                // 更新UI
+                updateRotationSlider();
+            }
+        });
+
+        $('#rotate-right').click(function() {
+            if (selectedShape) {
+                // 应用旋转
+                selectedShape.rotateAtCenter(5);
+                
+                // 更新保存的旋转角度
+                var id = selectedShape.node.id;
+                currentRotations[id] = (currentRotations[id] || 0) + 5;
+                
+                // 更新UI
+                updateRotationSlider();
+            }
+        });
+
+        $('#flip-horizontal').click(function() {
+            if (selectedShape) {
+                selectedShape.flipHorizontalAtCenter();
+                updateRotationSlider();
+            }
+        });
+
+        $('#flip-vertical').click(function() {
+            if (selectedShape) {
+                selectedShape.flipVerticalAtCenter();
+                updateRotationSlider();
+            }
+        });
+        $('#kill').click(function() {
+            if (selectedShape) {
+                selectedShape.remove();
+		selectedShape = null;
+            }
+        });
+        $('#s1').click(function() {
+            if (selectedShape) {
+		var childSnap = Snap(selectedShape.node.children[0])
+		var currentTransform = childSnap.transform().local;
+		var {scalex, scaley} = childSnap.transform().localMatrix.split();
+		const target_scale = 1;
+		var diffx = target_scale/Math.abs(scalex);
+		var diffy = target_scale/Math.abs(scaley);
+		var transform = "s" + [diffx, diffy];
+		return childSnap.transform(currentTransform + transform);
+            }
+        });
+        $('#s2').click(function() {
+            if (selectedShape) {
+		var childSnap = Snap(selectedShape.node.children[0])
+		var currentTransform = childSnap.transform().local;
+		var {scalex, scaley} = childSnap.transform().localMatrix.split();
+		const target_scale = 2;
+		var diffx = target_scale/Math.abs(scalex);
+		var diffy = target_scale/Math.abs(scaley);
+		var transform = "s" + [diffx, diffy];
+		return childSnap.transform(currentTransform + transform);
+            }
+        });
+        $('#s3').click(function() {
+            if (selectedShape) {
+		var childSnap = Snap(selectedShape.node.children[0])
+		var currentTransform = childSnap.transform().local;
+		var {scalex, scaley} = childSnap.transform().localMatrix.split();
+		const target_scale = 3;
+		var diffx = target_scale/Math.abs(scalex);
+		var diffy = target_scale/Math.abs(scaley);
+		var transform = "s" + [diffx, diffy];
+		return childSnap.transform(currentTransform + transform);
+            }
+        });
+
+        // 浮动按钮事件
+        $('#float-rotate-left').click(function() {
+            if (selectedShape) {
+                // 应用旋转
+                selectedShape.rotateAtCenter(-5);
+                
+                // 更新保存的旋转角度
+                var id = selectedShape.node.id;
+                currentRotations[id] = (currentRotations[id] || 0) - 5;
+                
+                // 更新UI
+                updateRotationSlider();
+            }
+        });
+
+        $('#float-rotate-right').click(function() {
+            if (selectedShape) {
+                // 应用旋转
+                selectedShape.rotateAtCenter(5);
+                
+                // 更新保存的旋转角度
+                var id = selectedShape.node.id;
+                currentRotations[id] = (currentRotations[id] || 0) + 5;
+                
+                // 更新UI
+                updateRotationSlider();
+            }
+        });
+
+        $('#float-flip-vertical').click(function() {
+            if (selectedShape) {
+                selectedShape.flipVerticalAtCenter(); // 垂直翻转
+                updateRotationSlider();
+            }
+        });
+
+        // 为每个形状保存当前旋转角度
+        var currentRotations = {};
+        
+        // 旋转滑杆事件
+        $('#rotation-slider').on('input change', function() {
+            if (selectedShape) {
+                // 获取新的旋转角度
+                var newRotation = parseInt($(this).val());
+                
+                // 获取形状ID
+                var id = selectedShape.node.id;
+                
+                // 保存旧的旋转角度
+                var oldRotation = currentRotations[id] || 0;
+                
+                // 计算旋转差值
+                var rotationDiff = newRotation - oldRotation;
+                
+                // 应用旋转差值
+                selectedShape.rotateAtCenter(rotationDiff);
+                
+                // 更新显示的旋转角度
+                $('#rotation-value').text(newRotation + '°');
+                
+                // 更新保存的旋转角度
+                currentRotations[id] = newRotation;
+                
+                // 更新UI位置
+                // updateRotationSlider();
+            }
+        });
+
+        // 显示旋转滑杆
+        function showRotationSlider(shape) {
+            var center = getCurrentCenter(shape);
+            var sliderContainer = $('#rotation-slider-container');
+            
+            // 计算滑杆位置，显示在板块下方
+            var svgElement = $('svg');
+            var svgRect = svgElement[0].getBoundingClientRect();
+            var scaleX = svgRect.width / 500; // viewBox宽度为500
+            var scaleY = svgRect.height / 500; // viewBox高度为500
+            
+            // 获取滑杆容器的实际尺寸
+            var sliderWidth = sliderContainer.outerWidth() || 200; // 默认200px作为后备值
+            
+            var x = (center.x - sliderWidth / 2) * scaleX + svgRect.left; // 水平居中
+            var y = (center.y + 30) * scaleY + svgRect.top; // 在中心下方30个单位
+            
+            // 确保滑杆不会超出视口
+            var viewportWidth = $(window).width();
+            var viewportHeight = $(window).height();
+            var sliderHeight = sliderContainer.outerHeight() || 40; // 默认40px作为后备值
+            
+            if (x < 0) x = 0;
+            if (x + sliderWidth > viewportWidth) {
+                x = viewportWidth - sliderWidth;
+            }
+            
+            if (y + sliderHeight > viewportHeight) {
+                y = (center.y - 30 - sliderHeight) * scaleY + svgRect.top; // 如果下方不够，显示在上方
+            }
+            
+            // sliderContainer.css({
+            //     left: x + 'px',
+            //     top: y + 'px',
+            //     display: 'flex',
+            //     alignItems: 'center'
+            // });
+            
+            // 设置滑杆为当前保存的旋转角度
+            var id = shape.node.id;
+            var currentRotation = currentRotations[id] || 0;
+            $('#rotation-slider').val(currentRotation);
+            $('#rotation-value').text(currentRotation + '°');
+	    $('#rotation-slider-container').show();
+        }
+
+        // 隐藏旋转滑杆
+        function hideRotationSlider() {
+            $('#rotation-slider-container').hide();
+        }
+        
+        // 更新旋转滑杆值
+        function updateRotationSlider() {
+            // 当形状旋转后，更新UI位置
+            if (selectedShape) {
+                showFloatingButtons(selectedShape);
+                showRotationSlider(selectedShape);
+            }
+        }
+
+        // 阻止浮动按钮和旋转滑杆的点击事件冒泡到SVG
+        $('.floating-buttons button, .rotation-slider-container').click(function(e) {
+            e.stopPropagation();
+        });
+        
+        // 窗口大小改变时，重新计算UI位置
+        $(window).resize(function() {
+            if (selectedShape) {
+                showFloatingButtons(selectedShape);
+                showRotationSlider(selectedShape);
+            }
+        });
+    </script>
+</body>
+</html>
