@@ -1,262 +1,281 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <title>七巧板模拟</title>
 <style>
 body {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  user-select: none;
+    margin: 0;
+    background: #f0f0f0;
+    font-family: Arial, sans-serif;
 }
 #toolbar {
-  background: #ddd;
-  padding: 5px;
-  display: flex;
-  gap: 5px;
-  align-items: center;
-}
-#canvas {
-  flex: 1;
-  background: #f0f0f0;
+    background: #ffd966;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 button {
-  padding: 5px 10px;
-  cursor: pointer;
+    padding: 5px 12px;
+    border: none;
+    border-radius: 6px;
+    background: #ff9900;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
 }
-input[type=range] {
-  width: 120px;
+button:hover {
+    background: #cc7a00;
+}
+#deleteBtn { background: #e63946; }
+#deleteBtn:hover { background: #b02631; }
+#snapBtn.active { background: #6a994e; }
+label {
+    font-weight: bold;
+    margin-left: 10px;
+}
+#gameCanvas {
+    display: block;
+    background-color: white;
 }
 </style>
 </head>
 <body>
+
 <div id="toolbar">
-  <button id="newSet">新组</button>
-  <button id="flipBtn">翻转</button>
-  <button id="deleteBtn" style="display:none;">删除</button>
-  <label>旋转：
-    <input id="rotateSlider" type="range" min="0" max="360" value="0">
-  </label>
-  <button id="s1">s1</button>
-  <button id="s2">s2</button>
-  <button id="s3">s3</button>
+    <button id="newSet">新组</button>
+    <button id="flipBtn">翻转</button>
+    <button id="deleteBtn" style="display:none;">删除</button>
+    <button id="snapBtn">吸附关</button>
+    <label>缩放: </label>
+    <button class="scaleBtn" data-scale="1">s1</button>
+    <button class="scaleBtn" data-scale="2">s2</button>
+    <button class="scaleBtn" data-scale="3">s3</button>
+    <label>旋转: </label>
+    <input type="range" id="rotateSlider" min="0" max="360" value="0">
 </div>
-<canvas id="canvas"></canvas>
+<canvas id="gameCanvas"></canvas>
 
 <script>
-const canvas = document.getElementById('canvas');
+const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const rotateSlider = document.getElementById('rotateSlider');
-const flipBtn = document.getElementById('flipBtn');
-const deleteBtn = document.getElementById('deleteBtn');
-
-let pieces = [];
-let selectedPiece = null;
-let dragging = false;
-let dragOffset = {x:0, y:0};
-let highlightTime = 0;
-
-const baseScale = 0.3; // 初始 3 倍
-
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight - document.getElementById('toolbar').offsetHeight;
-}
-window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 
-function drawGrid() {
-  const step = 20;
-  ctx.strokeStyle = '#ccc';
-  ctx.lineWidth = 1;
-  for(let x = 0; x < canvas.width; x += step){
-    ctx.beginPath();
-    ctx.moveTo(x,0);
-    ctx.lineTo(x,canvas.height);
-    ctx.stroke();
-  }
-  for(let y=0; y<canvas.height; y+=step){
-    ctx.beginPath();
-    ctx.moveTo(0,y);
-    ctx.lineTo(canvas.width,y);
-    ctx.stroke();
-  }
-}
+// 七巧板模板数据（单位：原始像素，按需缩放 0.1）
+const tangramTemplates = [
+    {name:'triangle_yellow', points:[[0,0],[200,200],[0,400]], center:[100,200], color:'yellow'},
+    {name:'triangle_red', points:[[0,0],[400,0],[200,200]], center:[200,100], color:'red'},
+    {name:'triangle_purple', points:[[400,200],[200,400],[400,400]], center:[350,350], color:'purple'},
+    {name:'triangle_orange', points:[[100,300],[0,400],[200,400]], center:[10,350], color:'orange'},
+    {name:'rect_blue', points:[[100,300],[200,200],[300,300],[200,400]], center:[200,300], color:'blue'},
+    {name:'triangle_green', points:[[200,200],[300,300],[300,100]], center:[250,200], color:'green'},
+    {name:'parallelogram_pink', points:[[400,0],[300,100],[300,300],[400,200]], center:[350,150], color:'pink'}
+];
 
-function createSet(originX, originY, scale=baseScale) {
-  const shapes = [
-    { name:'triangle_yellow', pts:[[0,0],[200,200],[0,400]], center:[100,200], color:'yellow' },
-    { name:'triangle_red', pts:[[0,0],[400,0],[200,200]], center:[200,100], color:'red' },
-    { name:'triangle_purple', pts:[[400,200],[200,400],[400,400]], center:[350,350], color:'purple' },
-    { name:'triangle_orange', pts:[[100,300],[0,400],[200,400]], center:[10,350], color:'orange' },
-    { name:'rect_blue', pts:[[100,300],[200,200],[300,300],[200,400]], center:[200,300], color:'blue' },
-    { name:'triangle_green', pts:[[200,200],[300,300],[300,100]], center:[250,200], color:'green' },
-    { name:'parallelogram_pink', pts:[[400,0],[300,100],[300,300],[400,200]], center:[350,150], color:'pink' }
-  ];
-  for (let s of shapes) {
-    pieces.push({
-      id: Math.random().toString(36).substr(2,9),
-      pts: s.pts,
-      center: s.center,
-      pos: {x: originX, y: originY},
-      rotation: 0,
-      scale: scale,
-      flipped: false,
-      color: s.color
-    });
-  }
-}
+let pieces = []; // 所有小板
+let selectedPiece = null;
+let dragOffset = {x:0, y:0};
+let dragging = false;
+let snapEnabled = false;
 
-function drawPiece(p, time) {
-  ctx.save();
-  // 平移到旋转中心位置
-  ctx.translate(p.pos.x + p.center[0] * p.scale, p.pos.y + p.center[1] * p.scale);
-  // 应用旋转
-  ctx.rotate(p.rotation * Math.PI / 180);
-  // 缩放和翻转
-  ctx.scale(p.flipped ? -p.scale : p.scale, p.scale);
-  // 平移到形状局部坐标
-  ctx.translate(-p.center[0], -p.center[1]);
-  // 绘制多边形
-  ctx.beginPath();
-  ctx.moveTo(p.pts[0][0], p.pts[0][1]);
-  for (let i = 1; i < p.pts.length; i++) {
-    ctx.lineTo(p.pts[i][0], p.pts[i][1]);
-  }
-  ctx.closePath();
-  ctx.fillStyle = p.color;
-  ctx.fill();
-  
-  // 选中动画效果
-  if (p === selectedPiece) {
-    const alpha = 0.5 + 0.5 * Math.sin(time / 200);
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawAll(time) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawGrid();
-  for (let p of pieces) {
-    drawPiece(p, time);
-  }
-}
-
-function getMousePos(evt) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: evt.clientX - rect.left,
-    y: evt.clientY - rect.top
-  };
-}
-
-function hitTest(p, x, y) {
-  ctx.save();
-  ctx.translate(p.pos.x + p.center[0] * p.scale, p.pos.y + p.center[1] * p.scale);
-  ctx.rotate(p.rotation * Math.PI / 180);
-  ctx.scale(p.flipped ? -p.scale : p.scale, p.scale);
-  ctx.translate(-p.center[0], -p.center[1]);
-  ctx.beginPath();
-  ctx.moveTo(p.pts[0][0], p.pts[0][1]);
-  for (let i = 1; i < p.pts.length; i++) {
-    ctx.lineTo(p.pts[i][0], p.pts[i][1]);
-  }
-  ctx.closePath();
-  const hit = ctx.isPointInPath(x, y);
-  ctx.restore();
-  return hit;
-}
-
-canvas.addEventListener('mousedown', e => {
-  const mouse = getMousePos(e);
-  selectedPiece = null;
-  for (let i = pieces.length - 1; i >= 0; i--) {
-    if (hitTest(pieces[i], mouse.x, mouse.y)) {
-      selectedPiece = pieces[i];
-      dragOffset.x = mouse.x - selectedPiece.pos.x;
-      dragOffset.y = mouse.y - selectedPiece.pos.y;
-      dragging = true;
-      break;
+// 按钮绑定
+document.getElementById('newSet').onclick = () => addTangramSet();
+document.getElementById('flipBtn').onclick = () => { if(selectedPiece){selectedPiece.flipped=!selectedPiece.flipped;} };
+document.getElementById('deleteBtn').onclick = () => { 
+    if(selectedPiece){
+        pieces = pieces.filter(p=>p!==selectedPiece);
+        selectedPiece=null;
     }
-  }
-  updateUI();
+};
+document.getElementById('snapBtn').onclick = function(){
+    snapEnabled=!snapEnabled;
+    this.textContent = snapEnabled ? '吸附开' : '吸附关';
+    this.classList.toggle('active', snapEnabled);
+};
+document.querySelectorAll('.scaleBtn').forEach(btn=>{
+    btn.onclick = () => { if(selectedPiece){ selectedPiece.scale=Number(btn.dataset.scale); } };
 });
+document.getElementById('rotateSlider').oninput = function(){
+    if(selectedPiece){ selectedPiece.rotation = Number(this.value)*Math.PI/180; }
+};
 
-canvas.addEventListener('mousemove', e => {
-  if (dragging && selectedPiece) {
-    const mouse = getMousePos(e);
-    selectedPiece.pos.x = mouse.x - dragOffset.x;
-    selectedPiece.pos.y = mouse.y - dragOffset.y;
-  }
-});
+// 添加第一套
+addTangramSet();
 
-canvas.addEventListener('mouseup', e => {
-  dragging = false;
-});
-
-rotateSlider.addEventListener('input', () => {
-  if (selectedPiece) {
-    selectedPiece.rotation = parseFloat(rotateSlider.value);
-  }
-});
-
-flipBtn.addEventListener('click', () => {
-  if (selectedPiece) {
-    selectedPiece.flipped = !selectedPiece.flipped;
-  }
-});
-
-deleteBtn.addEventListener('click', () => {
-  if (selectedPiece) {
-    pieces = pieces.filter(p => p !== selectedPiece);
-    selectedPiece = null;
-    updateUI();
-  }
-});
-
-document.getElementById('newSet').addEventListener('click', () => {
-  const origin = { x: Math.random() * 200 + 50, y: Math.random() * 200 + 50 };
-  createSet(origin.x, origin.y, baseScale);
-});
-
-document.getElementById('s1').addEventListener('click', () => {
-  if (selectedPiece) {
-    selectedPiece.scale = baseScale * 1;
-  }
-});
-document.getElementById('s2').addEventListener('click', () => {
-  if (selectedPiece) {
-    selectedPiece.scale = baseScale * 2;
-  }
-});
-document.getElementById('s3').addEventListener('click', () => {
-  if (selectedPiece) {
-    selectedPiece.scale = baseScale * 3;
-  }
-});
-
-function updateUI() {
-  if (selectedPiece) {
-    deleteBtn.style.display = 'inline-block';
-    rotateSlider.value = selectedPiece.rotation;
-  } else {
-    deleteBtn.style.display = 'none';
-  }
+function addTangramSet(){
+    const offsetX = 50 + Math.random()*100;
+    const offsetY = 80 + Math.random()*100;
+    const scaleFactor = Math.min(canvas.width, canvas.height) * 0.1 / 400; // 单套占屏幕10%
+    tangramTemplates.forEach(t=>{
+        pieces.push({
+            name: t.name,
+            points: t.points.map(p=>({x:p[0]*scaleFactor, y:p[1]*scaleFactor})),
+            center: {x:t.center[0]*scaleFactor, y:t.center[1]*scaleFactor},
+            color: t.color,
+            x: offsetX,
+            y: offsetY,
+            rotation: 0,
+            scale: 1,
+            flipped: false
+        });
+    });
 }
 
-function animate(time) {
-  drawAll(time);
-  requestAnimationFrame(animate);
+function resizeCanvas(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - document.getElementById('toolbar').offsetHeight;
 }
 
-// 初始加载一组（3 倍大）
-createSet(150, 150, baseScale);
-animate();
+// 绘制主循环
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawGrid();
+    for(let p of pieces){
+        drawPiece(p, p===selectedPiece);
+    }
+    requestAnimationFrame(draw);
+}
+draw();
+
+function drawGrid(){
+    const size = 40;
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 1;
+    for(let x=0;x<canvas.width;x+=size){
+        ctx.beginPath();
+        ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
+    }
+    for(let y=0;y<canvas.height;y+=size){
+        ctx.beginPath();
+        ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+    }
+}
+
+function drawPiece(p, highlight){
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.translate(p.center.x, p.center.y);
+    ctx.scale(p.flipped ? -p.scale : p.scale, p.scale);
+    ctx.rotate(p.rotation);
+    ctx.translate(-p.center.x, -p.center.y);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.moveTo(p.points[0].x, p.points[0].y);
+    for(let i=1; i<p.points.length; i++){
+        ctx.lineTo(p.points[i].x, p.points[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    if(highlight){
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#333';
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// 点击检测
+function hitTest(mx, my){
+    for(let i=pieces.length-1; i>=0; i--){
+        if(pointInPiece(mx,my,pieces[i])) return pieces[i];
+    }
+    return null;
+}
+
+function pointInPiece(mx, my, p){
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.translate(p.center.x, p.center.y);
+    ctx.scale(p.flipped ? -p.scale : p.scale, p.scale);
+    ctx.rotate(p.rotation);
+    ctx.translate(-p.center.x, -p.center.y);
+    ctx.beginPath();
+    ctx.moveTo(p.points[0].x, p.points[0].y);
+    for(let i=1;i<p.points.length;i++){
+        ctx.lineTo(p.points[i].x, p.points[i].y);
+    }
+    ctx.closePath();
+    const res = ctx.isPointInPath(mx, my);
+    ctx.restore();
+    return res;
+}
+
+// 鼠标事件
+canvas.addEventListener('mousedown', e=>{
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const hit = hitTest(mx, my);
+    if(hit){
+        selectedPiece = hit;
+        pieces = pieces.filter(p=>p!==hit);
+        pieces.push(hit); // 提到最上
+        dragOffset.x = mx - hit.x;
+        dragOffset.y = my - hit.y;
+        dragging = true;
+        document.getElementById('deleteBtn').style.display='inline-block';
+        document.getElementById('rotateSlider').value = (hit.rotation*180/Math.PI).toFixed(0);
+    } else {
+        selectedPiece = null;
+        document.getElementById('deleteBtn').style.display='none';
+    }
+});
+canvas.addEventListener('mousemove', e=>{
+    if(dragging && selectedPiece){
+        const rect = canvas.getBoundingClientRect();
+        let nx = e.clientX - rect.left - dragOffset.x;
+        let ny = e.clientY - rect.top - dragOffset.y;
+        if(snapEnabled){
+            const snapRes = getSnapPosition(selectedPiece, nx, ny);
+            if(snapRes) { nx = snapRes.x; ny = snapRes.y; }
+        }
+        selectedPiece.x = nx;
+        selectedPiece.y = ny;
+    }
+});
+canvas.addEventListener('mouseup', ()=> dragging=false);
+
+// 吸附计算
+function getSnapPosition(piece, nx, ny){
+    const threshold = 15;
+    for(let other of pieces){
+        if(other===piece) continue;
+        const p1Pts = getTransformedPoints(piece, nx, ny);
+        const p2Pts = getTransformedPoints(other, other.x, other.y);
+        for(let pa of p1Pts){
+            for(let pb of p2Pts){
+                const dx = pb.x - pa.x;
+                const dy = pb.y - pa.y;
+                if(Math.hypot(dx,dy) < threshold){
+                    return { x: nx+dx, y: ny+dy };
+                }
+            }
+        }
+    }
+    return null;
+}
+
+function getTransformedPoints(p, ox, oy){
+    const pts = [];
+    const cos = Math.cos(p.rotation);
+    const sin = Math.sin(p.rotation);
+    for(let pt of p.points){
+        let x = pt.x - p.center.x;
+        let y = pt.y - p.center.y;
+        if(p.flipped) x = -x;
+        x *= p.scale; y *= p.scale;
+        const rx = x*cos - y*sin;
+        const ry = x*sin + y*cos;
+        const tx = rx + p.center.x + ox;
+        const ty = ry + p.center.y + oy;
+        pts.push({x:tx, y:ty});
+    }
+    return pts;
+}
 </script>
 </body>
 </html>
