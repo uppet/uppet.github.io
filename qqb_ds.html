@@ -16,7 +16,7 @@
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             min-height: 100vh;
             overflow: hidden;
-            touch-action: none;
+            touch-action: auto;
         }
 
         .container {
@@ -168,13 +168,106 @@
             border: 3px solid #fdcb6e !important;
         }
 
+        /* 移动设备优化 */
         @media (max-width: 768px) {
             .main-content {
                 flex-direction: column;
             }
             .controls {
                 order: -1;
+                max-height: 40vh;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch; /* 平滑滚动 */
             }
+            
+            .control-group {
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            
+            button {
+                padding: 10px 15px;
+                font-size: 0.9em;
+                margin: 3px;
+            }
+            
+            .slider-container {
+                margin: 10px 0;
+            }
+        }
+        
+        /* iPad横屏优化 */
+        @media (max-width: 1024px) and (orientation: landscape) {
+            .container {
+                padding: 5px;
+                height: auto;
+                min-height: 100vh;
+            }
+            
+            .header {
+                padding: 8px;
+                margin-bottom: 8px;
+                position: sticky;
+                top: 0;
+                z-index: 100;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+            
+            .main-content {
+                flex-direction: row;
+                height: auto;
+            }
+            
+            .canvas-container {
+                flex: 1;
+                min-height: 60vh;
+                position: sticky;
+                top: 80px;
+                align-self: flex-start;
+            }
+            
+            .controls {
+                flex: 1;
+                padding: 15px;
+                max-height: 70vh;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                position: relative;
+            }
+            
+            .control-group {
+                padding: 8px;
+                margin-bottom: 8px;
+            }
+            
+            button {
+                padding: 8px 12px;
+                font-size: 0.85em;
+                margin: 2px;
+            }
+            
+            .slider-container {
+                margin: 8px 0;
+            }
+        }
+        
+        /* 阻止画布区域的页面滚动 */
+        #gameCanvas {
+            touch-action: auto;
+        }
+        
+        /* 允许控制区域的页面滚动 */
+        .controls {
+            touch-action: auto;
+        }
+        
+        /* 整体页面可以滚动 */
+        body {
+            overflow: auto;
+            height: auto;
         }
     </style>
 </head>
@@ -449,8 +542,8 @@
             canvas.addEventListener('touchend', handleTouchEnd);
             canvas.addEventListener('touchcancel', handleTouchEnd);
             
-            // 防止移动端页面滚动
-            document.addEventListener('touchmove', function(e) {
+            // 只在画布区域拖动时阻止页面滚动
+            canvas.addEventListener('touchmove', function(e) {
                 if (isDragging) {
                     e.preventDefault();
                 }
@@ -476,6 +569,12 @@
                     this.style.transform = '';
                 });
             });
+            
+            // 允许控制区域的滚动
+            const controls = document.querySelector('.controls');
+            controls.addEventListener('touchmove', function(e) {
+                // 允许控制区域的自然滚动
+            }, { passive: true });
         }
 
         function handleMouseDown(e) {
@@ -691,6 +790,25 @@
 
         function addNewSet() {
             const newSet = new TangramSet(tangramSets.length);
+            
+            // 确保新组不会飞出操作区
+            const maxX = canvas.width - 400;
+            const maxY = canvas.height - 400;
+            
+            if (newSet.x > maxX) {
+                newSet.x = maxX;
+            }
+            if (newSet.y > maxY) {
+                newSet.y = maxY;
+            }
+            
+            // 更新所有七巧板的位置
+            newSet.pieces.forEach(piece => {
+                piece.x = newSet.x;
+                piece.y = newSet.y;
+                piece.updateTransform();
+            });
+            
             tangramSets.push(newSet);
         }
 
