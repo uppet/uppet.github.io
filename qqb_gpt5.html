@@ -56,6 +56,9 @@ let pieces = [];
 let selectedPiece = null;
 let dragging = false;
 let dragOffset = {x:0, y:0};
+let highlightTime = 0;
+
+const baseScale = 0.3; // 初始 3 倍
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
@@ -82,7 +85,7 @@ function drawGrid() {
   }
 }
 
-function createSet(originX, originY, scale=0.1) {
+function createSet(originX, originY, scale=baseScale) {
   const shapes = [
     { name:'triangle_yellow', pts:[[0,0],[200,200],[0,400]], center:[100,200], color:'yellow' },
     { name:'triangle_red', pts:[[0,0],[400,0],[200,200]], center:[200,100], color:'red' },
@@ -106,17 +109,17 @@ function createSet(originX, originY, scale=0.1) {
   }
 }
 
-function drawPiece(p) {
+function drawPiece(p, time) {
   ctx.save();
-  // 平移到世界坐标中的旋转中心位置
+  // 平移到旋转中心位置
   ctx.translate(p.pos.x + p.center[0] * p.scale, p.pos.y + p.center[1] * p.scale);
-  // 旋转
+  // 应用旋转
   ctx.rotate(p.rotation * Math.PI / 180);
-  // 缩放及翻转
+  // 缩放和翻转
   ctx.scale(p.flipped ? -p.scale : p.scale, p.scale);
-  // 再平移到形状坐标系
+  // 平移到形状局部坐标
   ctx.translate(-p.center[0], -p.center[1]);
-  // 绘制形状
+  // 绘制多边形
   ctx.beginPath();
   ctx.moveTo(p.pts[0][0], p.pts[0][1]);
   for (let i = 1; i < p.pts.length; i++) {
@@ -125,19 +128,22 @@ function drawPiece(p) {
   ctx.closePath();
   ctx.fillStyle = p.color;
   ctx.fill();
+  
+  // 选中动画效果
   if (p === selectedPiece) {
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'black';
+    const alpha = 0.5 + 0.5 * Math.sin(time / 200);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
     ctx.stroke();
   }
   ctx.restore();
 }
 
-function drawAll() {
+function drawAll(time) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
   for (let p of pieces) {
-    drawPiece(p);
+    drawPiece(p, time);
   }
 }
 
@@ -179,7 +185,6 @@ canvas.addEventListener('mousedown', e => {
     }
   }
   updateUI();
-  drawAll();
 });
 
 canvas.addEventListener('mousemove', e => {
@@ -187,7 +192,6 @@ canvas.addEventListener('mousemove', e => {
     const mouse = getMousePos(e);
     selectedPiece.pos.x = mouse.x - dragOffset.x;
     selectedPiece.pos.y = mouse.y - dragOffset.y;
-    drawAll();
   }
 });
 
@@ -198,14 +202,12 @@ canvas.addEventListener('mouseup', e => {
 rotateSlider.addEventListener('input', () => {
   if (selectedPiece) {
     selectedPiece.rotation = parseFloat(rotateSlider.value);
-    drawAll();
   }
 });
 
 flipBtn.addEventListener('click', () => {
   if (selectedPiece) {
     selectedPiece.flipped = !selectedPiece.flipped;
-    drawAll();
   }
 });
 
@@ -214,32 +216,27 @@ deleteBtn.addEventListener('click', () => {
     pieces = pieces.filter(p => p !== selectedPiece);
     selectedPiece = null;
     updateUI();
-    drawAll();
   }
 });
 
 document.getElementById('newSet').addEventListener('click', () => {
   const origin = { x: Math.random() * 200 + 50, y: Math.random() * 200 + 50 };
-  createSet(origin.x, origin.y, 0.1);
-  drawAll();
+  createSet(origin.x, origin.y, baseScale);
 });
 
 document.getElementById('s1').addEventListener('click', () => {
   if (selectedPiece) {
-    selectedPiece.scale = 0.1 * 1;
-    drawAll();
+    selectedPiece.scale = baseScale * 1;
   }
 });
 document.getElementById('s2').addEventListener('click', () => {
   if (selectedPiece) {
-    selectedPiece.scale = 0.1 * 2;
-    drawAll();
+    selectedPiece.scale = baseScale * 2;
   }
 });
 document.getElementById('s3').addEventListener('click', () => {
   if (selectedPiece) {
-    selectedPiece.scale = 0.1 * 3;
-    drawAll();
+    selectedPiece.scale = baseScale * 3;
   }
 });
 
@@ -252,9 +249,14 @@ function updateUI() {
   }
 }
 
-// 初始加载一组
-createSet(150, 150, 0.1);
-drawAll();
+function animate(time) {
+  drawAll(time);
+  requestAnimationFrame(animate);
+}
+
+// 初始加载一组（3 倍大）
+createSet(150, 150, baseScale);
+animate();
 </script>
 </body>
 </html>
