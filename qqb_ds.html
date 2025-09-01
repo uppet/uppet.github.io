@@ -377,53 +377,20 @@
                 this.pieces = TANGRAM_DEFINITIONS.map((def, index) =>
                     new TangramPiece(def, setIndex, index)
                 );
-                // 初始位置设置为正方形摆放，每套七巧板水平排列
+                // 每套七巧板水平排列，间距足够大
                 this.x = 50 + setIndex * 450;
                 this.y = 50;
                 
-                // 调整每块七巧板的位置，使其组成正方形
-                this.adjustInitialPositions();
+                // 设置初始位置，使七巧板组成正方形
+                this.setSquareFormation();
             }
 
-            adjustInitialPositions() {
-                // 根据七巧板的定义，调整位置使其组成400x400的正方形
+            setSquareFormation() {
+                // 根据七巧板的原始定义，所有七巧板已经在其定义的位置上组成正方形
+                // 不需要额外的位置调整，只需要设置整体的偏移量
                 this.pieces.forEach(piece => {
-                    // 所有七巧板都放在同一位置组成正方形
                     piece.x = this.x;
                     piece.y = this.y;
-                    
-                    // 根据七巧板类型调整位置偏移，使其正确组成正方形
-                    switch(piece.name) {
-                        case 'triangle_yellow':
-                            piece.x = this.x;
-                            piece.y = this.y;
-                            break;
-                        case 'triangle_red':
-                            piece.x = this.x;
-                            piece.y = this.y;
-                            break;
-                        case 'triangle_purple':
-                            piece.x = this.x + 200;
-                            piece.y = this.y + 200;
-                            break;
-                        case 'triangle_orange':
-                            piece.x = this.x;
-                            piece.y = this.y + 200;
-                            break;
-                        case 'rect_blue':
-                            piece.x = this.x + 100;
-                            piece.y = this.y + 200;
-                            break;
-                        case 'triangle_green':
-                            piece.x = this.x + 200;
-                            piece.y = this.y;
-                            break;
-                        case 'parallelogram_pink':
-                            piece.x = this.x + 200;
-                            piece.y = this.y;
-                            break;
-                    }
-                    
                     piece.updateTransform();
                 });
             }
@@ -529,6 +496,14 @@
         }
 
         function startDrag(x, y) {
+            // 首先取消所有七巧板的选择状态
+            for (let i = 0; i < tangramSets.length; i++) {
+                const set = tangramSets[i];
+                for (let j = 0; j < set.pieces.length; j++) {
+                    set.pieces[j].selected = false;
+                }
+            }
+            
             // 查找点击的七巧板
             for (let i = 0; i < tangramSets.length; i++) {
                 const set = tangramSets[i];
@@ -557,11 +532,8 @@
             }
             
             // 如果没有点击到任何七巧板，取消选择
-            if (selectedPiece) {
-                selectedPiece.selected = false;
-                selectedPiece = null;
-                document.getElementById('deleteBtn').style.display = 'none';
-            }
+            selectedPiece = null;
+            document.getElementById('deleteBtn').style.display = 'none';
         }
 
         function handleMouseMove(e) {
