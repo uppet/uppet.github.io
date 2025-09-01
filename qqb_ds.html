@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>七巧板模拟 - 儿童益智游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', 'Arial Rounded MT Bold', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 10px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 10px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            border-radius: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+        }
+
+        .canvas-container {
+            flex: 8;
+            position: relative;
+            background: #f8f9fa;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background: 
+                linear-gradient(90deg, rgba(200,200,200,0.1) 1px, transparent 1px),
+                linear-gradient(rgba(200,200,200,0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .controls {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .control-group {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+        }
+
+        .control-group h3 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        button {
+            background: linear-gradient(45deg, #4ecdc4, #44a08d);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            margin: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .delete-btn {
+            background: linear-gradient(45deg, #ff6b6b, #c0392b);
+        }
+
+        .scale-btn {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
+        }
+
+        .flip-btn {
+            background: linear-gradient(45deg, #9b59b6, #8e44ad);
+        }
+
+        .add-btn {
+            background: linear-gradient(45deg, #27ae60, #229954);
+        }
+
+        .snap-btn {
+            background: linear-gradient(45deg, #3498db, #2980b9);
+        }
+
+        .slider-container {
+            margin: 15px 0;
+        }
+
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            color: #495057;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 10px;
+            background: #dee2e6;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4ecdc4;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+        .selected-piece {
+            background: #ffeaa7 !important;
+            border: 3px solid #fdcb6e !important;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            .controls {
+                order: -1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 七巧板创意工坊</h1>
+        </div>
+        
+        <div class="main-content">
+            <div class="canvas-container">
+                <canvas id="gameCanvas"></canvas>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <h3>🔄 旋转控制</h3>
+                    <div class="slider-container">
+                        <label>旋转角度: <span id="angleValue">0°</span></label>
+                        <input type="range" id="rotationSlider" min="0" max="360" value="0">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>⚡ 快速操作</h3>
+                    <button class="flip-btn" onclick="flipSelected()">翻转</button>
+                    <button class="delete-btn" id="deleteBtn" style="display:none;" onclick="deleteSelected()">删除</button>
+                </div>
+
+                <div class="control-group">
+                    <h3>📏 缩放控制</h3>
+                    <button class="scale-btn" onclick="scaleSelected(1)">S1 (1倍)</button>
+                    <button class="scale-btn" onclick="scaleSelected(2)">S2 (2倍)</button>
+                    <button class="scale-btn" onclick="scaleSelected(3)">S3 (3倍)</button>
+                </div>
+
+                <div class="control-group">
+                    <h3>🧩 七巧板管理</h3>
+                    <button class="add-btn" onclick="addNewSet()">新组 ➕</button>
+                    <button class="snap-btn" id="snapToggle" onclick="toggleSnap()">吸附功能: 关闭</button>
+                </div>
+
+                <div class="control-group">
+                    <h3>💡 提示</h3>
+                    <p style="color: #6c757d; font-size: 0.9em;">
+                        点击选择七巧板，拖动移动，滑动条旋转，按钮翻转和缩放
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 七巧板定义
+        const TANGRAM_DEFINITIONS = [
+            {
+                name: 'triangle_yellow',
+                points: [{x: 0, y: 0}, {x: 200, y: 200}, {x: 0, y: 400}],
+                center: {x: 100, y: 200},
+                color: '#FFD700'
+            },
+            {
+                name: 'triangle_red',
+                points: [{x: 0, y: 0}, {x: 400, y: 0}, {x: 200, y: 200}],
+                center: {x: 200, y: 100},
+                color: '#FF6B6B'
+            },
+            {
+                name: 'triangle_purple',
+                points: [{x: 400, y: 200}, {x: 200, y: 400}, {x: 400, y: 400}],
+                center: {x: 350, y: 350},
+                color: '#9B59B6'
+            },
+            {
+                name: 'triangle_orange',
+                points: [{x: 100, y: 300}, {x: 0, y: 400}, {x: 200, y: 400}],
+                center: {x: 100, y: 350},
+                color: '#FFA500'
+            },
+            {
+                name: 'rect_blue',
+                points: [{x: 100, y: 300}, {x: 200, y: 200}, {x: 300, y: 300}, {x: 200, y: 400}],
+                center: {x: 200, y: 300},
+                color: '#3498DB'
+            },
+            {
+                name: 'triangle_green',
+                points: [{x: 200, y: 200}, {x: 300, y: 300}, {x: 300, y: 100}],
+                center: {x: 250, y: 200},
+                color: '#27AE60'
+            },
+            {
+                name: 'parallelogram_pink',
+                points: [{x: 400, y: 0}, {x: 300, y: 100}, {x: 300, y: 300}, {x: 400, y: 200}],
+                center: {x: 350, y: 150},
+                color: '#FF69B4'
+            }
+        ];
+
+        class TangramPiece {
+            constructor(definition, setIndex, pieceIndex) {
+                this.name = definition.name;
+                this.originalPoints = definition.points;
+                this.center = {...definition.center};
+                this.color = definition.color;
+                this.setIndex = setIndex;
+                this.pieceIndex = pieceIndex;
+                
+                this.x = 0;
+                this.y = 0;
+                this.rotation = 0;
+                this.scale = 1;
+                this.flipped = false;
+                this.selected = false;
+                
+                this.updateTransform();
+            }
+
+            updateTransform() {
+                this.transformedPoints = this.originalPoints.map(point => {
+                    let x = point.x - this.center.x;
+                    let y = point.y - this.center.y;
+
+                    // 应用翻转
+                    if (this.flipped) {
+                        x = -x;
+                    }
+
+                    // 应用旋转
+                    const angle = this.rotation * Math.PI / 180;
+                    const cos = Math.cos(angle);
+                    const sin = Math.sin(angle);
+                    const rotatedX = x * cos - y * sin;
+                    const rotatedY = x * sin + y * cos;
+
+                    // 应用缩放
+                    const scaledX = rotatedX * this.scale;
+                    const scaledY = rotatedY * this.scale;
+
+                    // 应用平移
+                    return {
+                        x: scaledX + this.center.x + this.x,
+                        y: scaledY + this.center.y + this.y
+                    };
+                });
+            }
+
+            draw(ctx) {
+                ctx.save();
+                
+                if (this.selected) {
+                    ctx.strokeStyle = '#FFD93D';
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = 'rgba(255, 217, 61, 0.5)';
+                    ctx.shadowBlur = 10;
+                }
+
+                ctx.beginPath();
+                ctx.moveTo(this.transformedPoints[0].x, this.transformedPoints[0].y);
+                for (let i = 1; i < this.transformedPoints.length; i++) {
+                    ctx.lineTo(this.transformedPoints[i].x, this.transformedPoints[i].y);
+                }
+                ctx.closePath();
+
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            isPointInside(x, y) {
+                // 简单的多边形点击检测
+                let inside = false;
+                for (let i = 0, j = this.transformedPoints.length - 1; i < this.transformedPoints.length; j = i++) {
+                    const xi = this.transformedPoints[i].x;
+                    const yi = this.transformedPoints[i].y;
+                    const xj = this.transformedPoints[j].x;
+                    const yj = this.transformedPoints[j].y;
+                    
+                    const intersect = ((yi > y) !== (yj > y)) &&
+                        (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                }
+                return inside;
+            }
+        }
+
+        class TangramSet {
+            constructor(setIndex) {
+                this.pieces = TANGRAM_DEFINITIONS.map((def, index) => 
+                    new TangramPiece(def, setIndex, index)
+                );
+                this.x = 50 + setIndex * 30;
+                this.y = 50 + setIndex * 30;
+            }
+
+            draw(ctx) {
+                this.pieces.forEach(piece => {
+                    piece.draw(ctx);
+                });
+            }
+        }
+
+        // 全局变量
+        let canvas, ctx;
+        let tangramSets = [];
+        let selectedPiece = null;
+        let isDragging = false;
+        let dragStartX, dragStartY;
+        let pieceStartX, pieceStartY;
+        let snapEnabled = false;
+        let scaleFactor = 0.1; // 初始缩放因子
+
+        function init() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // 设置画布大小
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // 添加第一套七巧板
+            addNewSet();
+            
+            // 设置事件监听器
+            setupEventListeners();
+            
+            // 开始动画循环
+            requestAnimationFrame(animate);
+        }
+
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+
+        function setupEventListeners() {
+            // 鼠标事件
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('mouseleave', handleMouseUp);
+            
+            // 触摸事件
+            canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+            canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+            canvas.addEventListener('touchend', handleTouchEnd);
+            canvas.addEventListener('touchcancel', handleTouchEnd);
+            
+            // 旋转滑块
+            const slider = document.getElementById('rotationSlider');
+            slider.addEventListener('input', function() {
+                document.getElementById('angleValue').textContent = this.value + '°';
+                if (selectedPiece) {
+                    selectedPiece.rotation = parseInt(this.value);
+                    selectedPiece.updateTransform();
+                }
+            });
+        }
+
+        function handleMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            startDrag(x, y);
+        }
+
+        function handleTouchStart(e) {
+            if (e.touches.length === 1) {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const x = e.touches[0].clientX - rect.left;
+                const y = e.touches[0].clientY - rect.top;
+                startDrag(x, y);
+            }
+        }
+
+        function startDrag(x, y) {
+            // 查找点击的七巧板
+            for (const set of tangramSets) {
+                for (const piece of set.pieces) {
+                    if (piece.isPointInside(x, y)) {
+                        selectedPiece = piece;
+                        selectedPiece.selected = true;
+                        isDragging = true;
+                        
+                        dragStartX = x;
+                        dragStartY = y;
+                        pieceStartX = selectedPiece.x;
+                        pieceStartY = selectedPiece.y;
+                        
+                        // 显示删除按钮
+                        document.getElementById('deleteBtn').style.display = 'block';
+                        
+                        // 更新旋转滑块
+                        document.getElementById('rotationSlider').value = selectedPiece.rotation;
+                        document.getElementById('angleValue').textContent = selectedPiece.rotation + '°';
+                        
+                        return;
+                    }
+                }
+            }
+            
+            // 如果没有点击到任何七巧板，取消选择
+            if (selectedPiece) {
+                selectedPiece.selected = false;
+                selectedPiece = null;
+                document.getElementById('deleteBtn').style.display = 'none';
+            }
+        }
+
+        function handleMouseMove(e) {
+            if (!isDragging || !selectedPiece) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            continueDrag(x, y);
+        }
+
+        function handleTouchMove(e) {
+            if (e.touches.length === 1 && isDragging && selectedPiece) {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const x = e.touches[0].clientX - rect.left;
+                const y = e.touches[0].clientY - rect.top;
+                continueDrag(x, y);
+            }
+        }
+
+        function continueDrag(x, y) {
+            let dx = x - dragStartX;
+            let dy = y - dragStartY;
+            
+            if (snapEnabled) {
+                // 吸附到网格
+                const gridSize = 20;
+                dx = Math.round(dx / gridSize) * gridSize;
+                dy = Math.round(dy / gridSize) * gridSize;
+            }
+            
+            selectedPiece.x = pieceStartX + dx;
+            selectedPiece.y = pieceStartY + dy;
+            selectedPiece.updateTransform();
+        }
+
+        function handleMouseUp() {
+            isDragging = false;
+        }
+
+        function handleTouchEnd() {
+            isDragging = false;
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制所有七巧板
+            tangramSets.forEach(set => set.draw(ctx));
+            
+            requestAnimationFrame(animate);
+        }
+
+        // 控制函数
+        function flipSelected() {
+            if (selectedPiece) {
+                selectedPiece.flipped = !selectedPiece.flipped;
+                selectedPiece.updateTransform();
+            }
+        }
+
+        function deleteSelected() {
+            if (selectedPiece) {
+                const setIndex = selectedPiece.setIndex;
+                const pieceIndex = selectedPiece.pieceIndex;
+                
+                tangramSets[setIndex].pieces.splice(pieceIndex, 1);
+                
+                // 如果该组没有七巧板了，删除整个组
+                if (tangramSets[setIndex].pieces.length === 0) {
+                    tangramSets.splice(setIndex, 1);
+                }
+                
+                selectedPiece = null;
+                document.getElementById('deleteBtn').style.display = 'none';
+            }
+        }
+
+        function scaleSelected(scale) {
+            if (selectedPiece) {
+                selectedPiece.scale = scale;
+                selectedPiece.updateTransform();
+            }
+        }
+
+        function addNewSet() {
+            const newSet = new TangramSet(tangramSets.length);
+            tangramSets.push(newSet);
+        }
+
+        function toggleSnap() {
+            snapEnabled = !snapEnabled;
+            const button = document.getElementById('snapToggle');
+            button.textContent = '吸附功能: ' + (snapEnabled ? '开启' : '关闭');
+        }
+
+        // 初始化应用
+        window.onload = init;
+    </script>
+</body>
+</html>
