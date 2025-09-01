@@ -196,6 +196,10 @@
                         <label>旋转角度: <span id="angleValue">0°</span></label>
                         <input type="range" id="rotationSlider" min="0" max="360" value="0">
                     </div>
+                    <div class="input-container" style="margin-top: 10px;">
+                        <input type="number" id="rotationInput" min="0" max="360" value="0" style="width: 60px; padding: 5px; border-radius: 5px; border: 1px solid #ccc;">
+                        <button onclick="setRotationFromInput()" style="margin-left: 5px; padding: 5px 10px;">应用</button>
+                    </div>
                 </div>
 
                 <div class="control-group">
@@ -209,6 +213,11 @@
                     <button class="scale-btn" onclick="scaleSelected(1)">S1 (1倍)</button>
                     <button class="scale-btn" onclick="scaleSelected(2)">S2 (2倍)</button>
                     <button class="scale-btn" onclick="scaleSelected(3)">S3 (3倍)</button>
+                    <button class="scale-btn" onclick="showScaleInput()">SC (自定义)</button>
+                    <div id="scaleInputContainer" style="display: none; margin-top: 10px;">
+                        <input type="number" id="scaleInput" min="0.1" max="10" step="0.1" value="1" style="width: 60px; padding: 5px; border-radius: 5px; border: 1px solid #ccc;">
+                        <button onclick="setScaleFromInput()" style="margin-left: 5px; padding: 5px 10px;">应用</button>
+                    </div>
                 </div>
 
                 <div class="control-group">
@@ -365,11 +374,58 @@
 
         class TangramSet {
             constructor(setIndex) {
-                this.pieces = TANGRAM_DEFINITIONS.map((def, index) => 
+                this.pieces = TANGRAM_DEFINITIONS.map((def, index) =>
                     new TangramPiece(def, setIndex, index)
                 );
-                this.x = 50 + setIndex * 30;
-                this.y = 50 + setIndex * 30;
+                // 初始位置设置为正方形摆放，每套七巧板水平排列
+                this.x = 50 + setIndex * 450;
+                this.y = 50;
+                
+                // 调整每块七巧板的位置，使其组成正方形
+                this.adjustInitialPositions();
+            }
+
+            adjustInitialPositions() {
+                // 根据七巧板的定义，调整位置使其组成400x400的正方形
+                this.pieces.forEach(piece => {
+                    // 所有七巧板都放在同一位置组成正方形
+                    piece.x = this.x;
+                    piece.y = this.y;
+                    
+                    // 根据七巧板类型调整位置偏移，使其正确组成正方形
+                    switch(piece.name) {
+                        case 'triangle_yellow':
+                            piece.x = this.x;
+                            piece.y = this.y;
+                            break;
+                        case 'triangle_red':
+                            piece.x = this.x;
+                            piece.y = this.y;
+                            break;
+                        case 'triangle_purple':
+                            piece.x = this.x + 200;
+                            piece.y = this.y + 200;
+                            break;
+                        case 'triangle_orange':
+                            piece.x = this.x;
+                            piece.y = this.y + 200;
+                            break;
+                        case 'rect_blue':
+                            piece.x = this.x + 100;
+                            piece.y = this.y + 200;
+                            break;
+                        case 'triangle_green':
+                            piece.x = this.x + 200;
+                            piece.y = this.y;
+                            break;
+                        case 'parallelogram_pink':
+                            piece.x = this.x + 200;
+                            piece.y = this.y;
+                            break;
+                    }
+                    
+                    piece.updateTransform();
+                });
             }
 
             draw(ctx) {
@@ -420,11 +476,18 @@
             canvas.addEventListener('mouseup', handleMouseUp);
             canvas.addEventListener('mouseleave', handleMouseUp);
             
-            // 触摸事件
+            // 触摸事件 - 优化移动设备支持
             canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
             canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
             canvas.addEventListener('touchend', handleTouchEnd);
             canvas.addEventListener('touchcancel', handleTouchEnd);
+            
+            // 防止移动端页面滚动
+            document.addEventListener('touchmove', function(e) {
+                if (isDragging) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
             
             // 旋转滑块
             const slider = document.getElementById('rotationSlider');
@@ -434,6 +497,17 @@
                     selectedPiece.rotation = parseInt(this.value);
                     selectedPiece.updateTransform();
                 }
+            });
+
+            // 移动设备优化：按钮触摸反馈
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(button => {
+                button.addEventListener('touchstart', function() {
+                    this.style.transform = 'scale(0.95)';
+                });
+                button.addEventListener('touchend', function() {
+                    this.style.transform = '';
+                });
             });
         }
 
@@ -456,8 +530,10 @@
 
         function startDrag(x, y) {
             // 查找点击的七巧板
-            for (const set of tangramSets) {
-                for (const piece of set.pieces) {
+            for (let i = 0; i < tangramSets.length; i++) {
+                const set = tangramSets[i];
+                for (let j = 0; j < set.pieces.length; j++) {
+                    const piece = set.pieces[j];
                     if (piece.isPointInside(x, y)) {
                         selectedPiece = piece;
                         selectedPiece.selected = true;
@@ -511,16 +587,78 @@
             let dx = x - dragStartX;
             let dy = y - dragStartY;
             
+            let newX = pieceStartX + dx;
+            let newY = pieceStartY + dy;
+            
             if (snapEnabled) {
-                // 吸附到网格
-                const gridSize = 20;
-                dx = Math.round(dx / gridSize) * gridSize;
-                dy = Math.round(dy / gridSize) * gridSize;
+                // 边缘吸附功能
+                const snapResult = checkEdgeSnap(newX, newY);
+                if (snapResult.snapped) {
+                    newX = snapResult.x;
+                    newY = snapResult.y;
+                } else {
+                    // 如果没有边缘吸附，则吸附到网格
+                    const gridSize = 20;
+                    newX = Math.round(newX / gridSize) * gridSize;
+                    newY = Math.round(newY / gridSize) * gridSize;
+                }
             }
             
-            selectedPiece.x = pieceStartX + dx;
-            selectedPiece.y = pieceStartY + dy;
+            selectedPiece.x = newX;
+            selectedPiece.y = newY;
             selectedPiece.updateTransform();
+        }
+
+        function checkEdgeSnap(x, y) {
+            if (!selectedPiece) return { snapped: false, x, y };
+            
+            const snapThreshold = 20; // 吸附阈值
+            let bestSnapX = x;
+            let bestSnapY = y;
+            let minDistance = Infinity;
+            
+            // 临时更新选中七巧板的位置来计算变换点
+            const originalX = selectedPiece.x;
+            const originalY = selectedPiece.y;
+            selectedPiece.x = x;
+            selectedPiece.y = y;
+            selectedPiece.updateTransform();
+            
+            // 检查与其他七巧板的边缘吸附
+            for (const set of tangramSets) {
+                for (const piece of set.pieces) {
+                    if (piece === selectedPiece) continue;
+                    
+                    // 确保其他七巧板的变换点是最新的
+                    piece.updateTransform();
+                    
+                    // 检查每个顶点的吸附
+                    for (const point1 of selectedPiece.transformedPoints) {
+                        for (const point2 of piece.transformedPoints) {
+                            const dx = point1.x - point2.x;
+                            const dy = point1.y - point2.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < snapThreshold && distance < minDistance) {
+                                bestSnapX = x - dx;
+                                bestSnapY = y - dy;
+                                minDistance = distance;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 恢复选中七巧板的位置
+            selectedPiece.x = originalX;
+            selectedPiece.y = originalY;
+            selectedPiece.updateTransform();
+            
+            return {
+                snapped: minDistance < snapThreshold,
+                x: bestSnapX,
+                y: bestSnapY
+            };
         }
 
         function handleMouseUp() {
@@ -550,18 +688,25 @@
 
         function deleteSelected() {
             if (selectedPiece) {
-                const setIndex = selectedPiece.setIndex;
-                const pieceIndex = selectedPiece.pieceIndex;
-                
-                tangramSets[setIndex].pieces.splice(pieceIndex, 1);
-                
-                // 如果该组没有七巧板了，删除整个组
-                if (tangramSets[setIndex].pieces.length === 0) {
-                    tangramSets.splice(setIndex, 1);
+                // 遍历所有七巧板组找到选中的七巧板
+                for (let i = 0; i < tangramSets.length; i++) {
+                    const set = tangramSets[i];
+                    const pieceIndex = set.pieces.indexOf(selectedPiece);
+                    
+                    if (pieceIndex !== -1) {
+                        // 删除选中的七巧板
+                        set.pieces.splice(pieceIndex, 1);
+                        
+                        // 如果该组没有七巧板了，删除整个组
+                        if (set.pieces.length === 0) {
+                            tangramSets.splice(i, 1);
+                        }
+                        
+                        selectedPiece = null;
+                        document.getElementById('deleteBtn').style.display = 'none';
+                        return;
+                    }
                 }
-                
-                selectedPiece = null;
-                document.getElementById('deleteBtn').style.display = 'none';
             }
         }
 
@@ -581,6 +726,36 @@
             snapEnabled = !snapEnabled;
             const button = document.getElementById('snapToggle');
             button.textContent = '吸附功能: ' + (snapEnabled ? '开启' : '关闭');
+        }
+
+        function setRotationFromInput() {
+            const input = document.getElementById('rotationInput');
+            let angle = parseInt(input.value);
+            if (isNaN(angle)) angle = 0;
+            angle = Math.max(0, Math.min(360, angle));
+            
+            if (selectedPiece) {
+                selectedPiece.rotation = angle;
+                selectedPiece.updateTransform();
+                document.getElementById('rotationSlider').value = angle;
+                document.getElementById('angleValue').textContent = angle + '°';
+            }
+        }
+
+        function showScaleInput() {
+            const container = document.getElementById('scaleInputContainer');
+            container.style.display = container.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function setScaleFromInput() {
+            const input = document.getElementById('scaleInput');
+            let scale = parseFloat(input.value);
+            if (isNaN(scale) || scale <= 0) scale = 1;
+            
+            if (selectedPiece) {
+                selectedPiece.scale = scale;
+                selectedPiece.updateTransform();
+            }
         }
 
         // 初始化应用
