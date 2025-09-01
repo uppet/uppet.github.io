@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>七巧板模拟</title>
+<style>
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  user-select: none;
+}
+#toolbar {
+  background: #ddd;
+  padding: 5px;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+#canvas {
+  flex: 1;
+  background: #f0f0f0;
+}
+button {
+  padding: 5px 10px;
+  cursor: pointer;
+}
+input[type=range] {
+  width: 120px;
+}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <button id="newSet">新组</button>
+  <button id="flipBtn">翻转</button>
+  <button id="deleteBtn" style="display:none;">删除</button>
+  <label>旋转：
+    <input id="rotateSlider" type="range" min="0" max="360" value="0">
+  </label>
+  <button id="s1">s1</button>
+  <button id="s2">s2</button>
+  <button id="s3">s3</button>
+</div>
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const rotateSlider = document.getElementById('rotateSlider');
+const flipBtn = document.getElementById('flipBtn');
+const deleteBtn = document.getElementById('deleteBtn');
+
+let pieces = [];
+let selectedPiece = null;
+let dragging = false;
+let dragOffset = {x:0, y:0};
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight - document.getElementById('toolbar').offsetHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function drawGrid() {
+  const step = 20;
+  ctx.strokeStyle = '#ccc';
+  ctx.lineWidth = 1;
+  for(let x = 0; x < canvas.width; x += step){
+    ctx.beginPath();
+    ctx.moveTo(x,0);
+    ctx.lineTo(x,canvas.height);
+    ctx.stroke();
+  }
+  for(let y=0; y<canvas.height; y+=step){
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.lineTo(canvas.width,y);
+    ctx.stroke();
+  }
+}
+
+function createSet(originX, originY, scale=0.1) {
+  const shapes = [
+    { name:'triangle_yellow', pts:[[0,0],[200,200],[0,400]], center:[100,200], color:'yellow' },
+    { name:'triangle_red', pts:[[0,0],[400,0],[200,200]], center:[200,100], color:'red' },
+    { name:'triangle_purple', pts:[[400,200],[200,400],[400,400]], center:[350,350], color:'purple' },
+    { name:'triangle_orange', pts:[[100,300],[0,400],[200,400]], center:[10,350], color:'orange' },
+    { name:'rect_blue', pts:[[100,300],[200,200],[300,300],[200,400]], center:[200,300], color:'blue' },
+    { name:'triangle_green', pts:[[200,200],[300,300],[300,100]], center:[250,200], color:'green' },
+    { name:'parallelogram_pink', pts:[[400,0],[300,100],[300,300],[400,200]], center:[350,150], color:'pink' }
+  ];
+  for (let s of shapes) {
+    pieces.push({
+      id: Math.random().toString(36).substr(2,9),
+      pts: s.pts,
+      center: s.center,
+      pos: {x: originX, y: originY},
+      rotation: 0,
+      scale: scale,
+      flipped: false,
+      color: s.color
+    });
+  }
+}
+
+function drawPiece(p) {
+  ctx.save();
+  // 平移到世界坐标中的旋转中心位置
+  ctx.translate(p.pos.x + p.center[0] * p.scale, p.pos.y + p.center[1] * p.scale);
+  // 旋转
+  ctx.rotate(p.rotation * Math.PI / 180);
+  // 缩放及翻转
+  ctx.scale(p.flipped ? -p.scale : p.scale, p.scale);
+  // 再平移到形状坐标系
+  ctx.translate(-p.center[0], -p.center[1]);
+  // 绘制形状
+  ctx.beginPath();
+  ctx.moveTo(p.pts[0][0], p.pts[0][1]);
+  for (let i = 1; i < p.pts.length; i++) {
+    ctx.lineTo(p.pts[i][0], p.pts[i][1]);
+  }
+  ctx.closePath();
+  ctx.fillStyle = p.color;
+  ctx.fill();
+  if (p === selectedPiece) {
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawAll() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawGrid();
+  for (let p of pieces) {
+    drawPiece(p);
+  }
+}
+
+function getMousePos(evt) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: evt.clientX - rect.left,
+    y: evt.clientY - rect.top
+  };
+}
+
+function hitTest(p, x, y) {
+  ctx.save();
+  ctx.translate(p.pos.x + p.center[0] * p.scale, p.pos.y + p.center[1] * p.scale);
+  ctx.rotate(p.rotation * Math.PI / 180);
+  ctx.scale(p.flipped ? -p.scale : p.scale, p.scale);
+  ctx.translate(-p.center[0], -p.center[1]);
+  ctx.beginPath();
+  ctx.moveTo(p.pts[0][0], p.pts[0][1]);
+  for (let i = 1; i < p.pts.length; i++) {
+    ctx.lineTo(p.pts[i][0], p.pts[i][1]);
+  }
+  ctx.closePath();
+  const hit = ctx.isPointInPath(x, y);
+  ctx.restore();
+  return hit;
+}
+
+canvas.addEventListener('mousedown', e => {
+  const mouse = getMousePos(e);
+  selectedPiece = null;
+  for (let i = pieces.length - 1; i >= 0; i--) {
+    if (hitTest(pieces[i], mouse.x, mouse.y)) {
+      selectedPiece = pieces[i];
+      dragOffset.x = mouse.x - selectedPiece.pos.x;
+      dragOffset.y = mouse.y - selectedPiece.pos.y;
+      dragging = true;
+      break;
+    }
+  }
+  updateUI();
+  drawAll();
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (dragging && selectedPiece) {
+    const mouse = getMousePos(e);
+    selectedPiece.pos.x = mouse.x - dragOffset.x;
+    selectedPiece.pos.y = mouse.y - dragOffset.y;
+    drawAll();
+  }
+});
+
+canvas.addEventListener('mouseup', e => {
+  dragging = false;
+});
+
+rotateSlider.addEventListener('input', () => {
+  if (selectedPiece) {
+    selectedPiece.rotation = parseFloat(rotateSlider.value);
+    drawAll();
+  }
+});
+
+flipBtn.addEventListener('click', () => {
+  if (selectedPiece) {
+    selectedPiece.flipped = !selectedPiece.flipped;
+    drawAll();
+  }
+});
+
+deleteBtn.addEventListener('click', () => {
+  if (selectedPiece) {
+    pieces = pieces.filter(p => p !== selectedPiece);
+    selectedPiece = null;
+    updateUI();
+    drawAll();
+  }
+});
+
+document.getElementById('newSet').addEventListener('click', () => {
+  const origin = { x: Math.random() * 200 + 50, y: Math.random() * 200 + 50 };
+  createSet(origin.x, origin.y, 0.1);
+  drawAll();
+});
+
+document.getElementById('s1').addEventListener('click', () => {
+  if (selectedPiece) {
+    selectedPiece.scale = 0.1 * 1;
+    drawAll();
+  }
+});
+document.getElementById('s2').addEventListener('click', () => {
+  if (selectedPiece) {
+    selectedPiece.scale = 0.1 * 2;
+    drawAll();
+  }
+});
+document.getElementById('s3').addEventListener('click', () => {
+  if (selectedPiece) {
+    selectedPiece.scale = 0.1 * 3;
+    drawAll();
+  }
+});
+
+function updateUI() {
+  if (selectedPiece) {
+    deleteBtn.style.display = 'inline-block';
+    rotateSlider.value = selectedPiece.rotation;
+  } else {
+    deleteBtn.style.display = 'none';
+  }
+}
+
+// 初始加载一组
+createSet(150, 150, 0.1);
+drawAll();
+</script>
+</body>
+</html>
