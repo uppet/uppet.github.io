@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鼠标行为日志记录器</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #1a1a2e;
+            color: #e6e6e6;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f3460, #1a1a2e);
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            border: 1px solid #2d4059;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #4cc9f0, #4361ee);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            color: #b0b0b0;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px;
+        }
+        
+        .panel {
+            flex: 1;
+            min-width: 300px;
+            background-color: #162447;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            border: 1px solid #2d4059;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #4361ee;
+            color: #4cc9f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .panel-title i {
+            font-size: 1.3rem;
+        }
+        
+        #tracking-area {
+            flex: 1;
+            background-color: #1a1a2e;
+            border-radius: 10px;
+            border: 2px dashed #4361ee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: crosshair;
+            min-height: 300px;
+            transition: all 0.3s;
+        }
+        
+        #tracking-area:hover {
+            border-color: #4cc9f0;
+            background-color: #1f2b4a;
+        }
+        
+        #tracking-area h3 {
+            font-size: 1.5rem;
+            color: #b0b0b0;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .coordinates {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            color: #4cc9f0;
+        }
+        
+        .event-counter {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .counter-box {
+            background-color: #1a1a2e;
+            border-radius: 8px;
+            padding: 12px 15px;
+            flex: 1;
+            min-width: 120px;
+            text-align: center;
+            border: 1px solid #2d4059;
+        }
+        
+        .counter-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .click-counter .counter-value {
+            color: #f72585;
+        }
+        
+        .release-counter .counter-value {
+            color: #4cc9f0;
+        }
+        
+        .move-counter .counter-value {
+            color: #7209b7;
+        }
+        
+        #log-container {
+            flex: 2;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background-color: #4361ee;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #3a56d4;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background-color: #2d4059;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #1f2b4a;
+            transform: translateY(-2px);
+        }
+        
+        .btn-danger {
+            background-color: #f72585;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #e01e76;
+            transform: translateY(-2px);
+        }
+        
+        #logs {
+            flex: 1;
+            background-color: #1a1a2e;
+            border-radius: 10px;
+            padding: 15px;
+            overflow-y: auto;
+            max-height: 400px;
+            border: 1px solid #2d4059;
+        }
+        
+        .log-entry {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            background-color: #162447;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .log-entry.click {
+            border-left-color: #f72585;
+        }
+        
+        .log-entry.release {
+            border-left-color: #4cc9f0;
+        }
+        
+        .log-entry.move {
+            border-left-color: #7209b7;
+        }
+        
+        .log-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .event-type {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .click .event-type {
+            color: #f72585;
+        }
+        
+        .release .event-type {
+            color: #4cc9f0;
+        }
+        
+        .move .event-type {
+            color: #7209b7;
+        }
+        
+        .log-details {
+            font-size: 0.9rem;
+            color: #b0b0b0;
+        }
+        
+        .log-time {
+            font-size: 0.9rem;
+            color: #888;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 20px;
+            color: #888;
+            font-size: 0.9rem;
+            border-top: 1px solid #2d4059;
+            width: 100%;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            h1 {
+                font-size: 2.2rem;
+            }
+            
+            .panel {
+                min-width: 100%;
+            }
+            
+            .controls {
+                flex-wrap: wrap;
+            }
+        }
+        
+        /* 鼠标点击动画效果 */
+        .click-effect {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: rgba(247, 37, 133, 0.6);
+            pointer-events: none;
+            animation: ripple 0.6s linear;
+            transform: translate(-50%, -50%);
+        }
+        
+        @keyframes ripple {
+            0% {
+                width: 0;
+                height: 0;
+                opacity: 0.8;
+            }
+            100% {
+                width: 60px;
+                height: 60px;
+                opacity: 0;
+            }
+        }
+        
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e;
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #4361ee;
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3a56d4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-mouse-pointer"></i> 鼠标行为日志记录器</h1>
+            <p class="subtitle">此页面记录鼠标的点击、松开和移动事件。在下方区域移动鼠标或点击以查看实时事件记录。所有数据仅保存在浏览器内存中，不会发送到服务器。</p>
+        </header>
+        
+        <div class="main-content">
+            <div class="panel">
+                <h2 class="panel-title"><i class="fas fa-bullseye"></i> 鼠标跟踪区域</h2>
+                <div id="tracking-area">
+                    <h3>在此区域移动或点击鼠标</h3>
+                    <div class="coordinates">坐标: <span id="coordinates">(0, 0)</span></div>
+                </div>
+                
+                <div class="event-counter">
+                    <div class="counter-box click-counter">
+                        <div class="counter-value" id="click-count">0</div>
+                        <div>点击事件</div>
+                    </div>
+                    <div class="counter-box release-counter">
+                        <div class="counter-value" id="release-count">0</div>
+                        <div>松开事件</div>
+                    </div>
+                    <div class="counter-box move-counter">
+                        <div class="counter-value" id="move-count">0</div>
+                        <div>移动事件</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel" id="log-container">
+                <div class="logs-header">
+                    <h2 class="panel-title"><i class="fas fa-clipboard-list"></i> 事件日志</h2>
+                    <div class="controls">
+                        <button class="btn btn-primary" id="export-btn">
+                            <i class="fas fa-file-export"></i> 导出日志
+                        </button>
+                        <button class="btn btn-secondary" id="pause-btn">
+                            <i class="fas fa-pause"></i> 暂停记录
+                        </button>
+                        <button class="btn btn-danger" id="clear-btn">
+                            <i class="fas fa-trash"></i> 清除日志
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="logs">
+                    <!-- 日志条目将动态添加到这里 -->
+                    <div class="log-entry move">
+                        <div class="log-info">
+                            <div class="event-type">鼠标移动</div>
+                            <div class="log-details">坐标: (400, 200) | 时间戳: <span class="log-time">页面加载时</span></div>
+                        </div>
+                        <div class="log-time">欢迎使用鼠标行为记录器！</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>鼠标行为日志记录器 &copy; 2023 | 事件日志仅保存在当前浏览器会话中，刷新页面将清除所有记录</p>
+        </footer>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const trackingArea = document.getElementById('tracking-area');
+        const logsContainer = document.getElementById('logs');
+        const coordinatesElement = document.getElementById('coordinates');
+        const clickCountElement = document.getElementById('click-count');
+        const releaseCountElement = document.getElementById('release-count');
+        const moveCountElement = document.getElementById('move-count');
+        const exportBtn = document.getElementById('export-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        
+        // 初始化变量
+        let logs = [];
+        let clickCount = 0;
+        let releaseCount = 0;
+        let moveCount = 0;
+        let isPaused = false;
+        let lastMoveTime = 0;
+        const moveThrottle = 50; // 移动事件节流时间(ms)
+        
+        // 初始化
+        function init() {
+            updateCounters();
+            
+            // 添加事件监听器
+            trackingArea.addEventListener('mousedown', handleMouseDown);
+            trackingArea.addEventListener('mouseup', handleMouseUp);
+            trackingArea.addEventListener('mousemove', handleMouseMove);
+            exportBtn.addEventListener('click', exportLogs);
+            pauseBtn.addEventListener('click', togglePause);
+            clearBtn.addEventListener('click', clearLogs);
+            
+            // 添加初始日志
+            addLog('move', {x: 400, y: 200}, '页面加载时');
+        }
+        
+        // 处理鼠标按下事件
+        function handleMouseDown(event) {
+            if (isPaused) return;
+            
+            const rect = trackingArea.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            clickCount++;
+            updateCounters();
+            addLog('click', {x, y});
+            createClickEffect(x, y);
+        }
+        
+        // 处理鼠标松开事件
+        function handleMouseUp(event) {
+            if (isPaused) return;
+            
+            const rect = trackingArea.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            releaseCount++;
+            updateCounters();
+            addLog('release', {x, y});
+        }
+        
+        // 处理鼠标移动事件（使用节流）
+        function handleMouseMove(event) {
+            const now = Date.now();
+            if (now - lastMoveTime < moveThrottle) return;
+            lastMoveTime = now;
+            
+            if (isPaused) return;
+            
+            const rect = trackingArea.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            // 更新坐标显示
+            coordinatesElement.textContent = `(${Math.round(x)}, ${Math.round(y)})`;
+            
+            moveCount++;
+            updateCounters();
+            addLog('move', {x, y});
+        }
+        
+        // 创建点击效果
+        function createClickEffect(x, y) {
+            const effect = document.createElement('div');
+            effect.className = 'click-effect';
+            effect.style.left = `${x}px`;
+            effect.style.top = `${y}px`;
+            trackingArea.appendChild(effect);
+            
+            // 动画结束后移除元素
+            setTimeout(() => {
+                effect.remove();
+            }, 600);
+        }
+        
+        // 添加日志条目
+        function addLog(type, coordinates, customTime = null) {
+            const timestamp = customTime || new Date().toLocaleTimeString();
+            const log = {
+                type,
+                coordinates,
+                timestamp,
+                id: Date.now() + Math.random()
+            };
+            
+            logs.unshift(log); // 添加到数组开头
+        
+            // 创建日志元素
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.dataset.id = log.id;
+            
+            let eventText = '';
+            let eventColor = '';
+            
+            switch(type) {
+                case 'click':
+                    eventText = '鼠标点击';
+                    eventColor = '#f72585';
+                    break;
+                case 'release':
+                    eventText = '鼠标松开';
+                    eventColor = '#4cc9f0';
+                    break;
+                case 'move':
+                    eventText = '鼠标移动';
+                    eventColor = '#7209b7';
+                    break;
+            }
+            
+            logEntry.innerHTML = `
+                <div class="log-info">
+                    <div class="event-type">${eventText}</div>
+                    <div class="log-details">坐标: (${Math.round(coordinates.x)}, ${Math.round(coordinates.y)}) | 时间戳: <span class="log-time">${timestamp}</span></div>
+                </div>
+                <div class="log-time">${timestamp}</div>
+            `;
+            
+            // 添加到日志容器
+            if (logsContainer.firstChild && logsContainer.firstChild.className === 'log-entry move') {
+                logsContainer.insertBefore(logEntry, logsContainer.firstChild.nextSibling);
+            } else {
+                logsContainer.insertBefore(logEntry, logsContainer.firstChild);
+            }
+            
+            // 限制日志数量
+            if (logs.length > 1024) {
+                logs.pop();
+                if (logsContainer.lastChild) {
+                    logsContainer.removeChild(logsContainer.lastChild);
+                }
+            }
+        }
+        
+        // 更新计数器显示
+        function updateCounters() {
+            clickCountElement.textContent = clickCount;
+            releaseCountElement.textContent = releaseCount;
+            moveCountElement.textContent = moveCount;
+        }
+        
+        // 导出日志
+        function exportLogs() {
+            if (logs.length === 0) {
+                alert('没有日志可导出！');
+                return;
+            }
+            
+            let logText = '鼠标行为日志记录\n';
+            logText += '生成时间: ' + new Date().toLocaleString() + '\n';
+            logText += '点击事件: ' + clickCount + ', 松开事件: ' + releaseCount + ', 移动事件: ' + moveCount + '\n\n';
+            logText += '事件类型, 坐标X, 坐标Y, 时间戳\n';
+            
+            logs.forEach(log => {
+                let eventType = '';
+                switch(log.type) {
+                    case 'click': eventType = '点击'; break;
+                    case 'release': eventType = '松开'; break;
+                    case 'move': eventType = '移动'; break;
+                }
+                
+                logText += `${eventType}, ${Math.round(log.coordinates.x)}, ${Math.round(log.coordinates.y)}, ${log.timestamp}\n`;
+            });
+            
+            // 创建下载链接
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mouse-log-${new Date().toISOString().slice(0, 10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // 添加导出日志
+            addLog('move', {x: 100, y: 100}, `日志导出 - ${new Date().toLocaleTimeString()}`);
+        }
+        
+        // 切换暂停状态
+        function togglePause() {
+            isPaused = !isPaused;
+            
+            if (isPaused) {
+                pauseBtn.innerHTML = '<i class="fas fa-play"></i> 继续记录';
+                pauseBtn.classList.remove('btn-secondary');
+                pauseBtn.classList.add('btn-primary');
+                trackingArea.style.opacity = '0.7';
+                trackingArea.style.cursor = 'not-allowed';
+                trackingArea.querySelector('h3').textContent = '记录已暂停 - 点击"继续记录"恢复';
+                
+                // 添加暂停日志
+                addLog('move', {x: 200, y: 150}, `记录暂停 - ${new Date().toLocaleTimeString()}`);
+            } else {
+                pauseBtn.innerHTML = '<i class="fas fa-pause"></i> 暂停记录';
+                pauseBtn.classList.remove('btn-primary');
+                pauseBtn.classList.add('btn-secondary');
+                trackingArea.style.opacity = '1';
+                trackingArea.style.cursor = 'crosshair';
+                trackingArea.querySelector('h3').textContent = '在此区域移动或点击鼠标';
+                
+                // 添加恢复日志
+                addLog('move', {x: 200, y: 150}, `记录恢复 - ${new Date().toLocaleTimeString()}`);
+            }
+        }
+        
+        // 清除日志
+        function clearLogs() {
+            if (logs.length === 0) {
+                alert('没有日志可清除！');
+                return;
+            }
+            
+            if (confirm('确定要清除所有日志吗？此操作不可撤销。')) {
+                logs = [];
+                clickCount = 0;
+                releaseCount = 0;
+                moveCount = 0;
+                
+                // 保留容器结构，清除所有日志条目
+                const initialLog = logsContainer.querySelector('.log-entry.move:last-child');
+                logsContainer.innerHTML = '';
+                if (initialLog) {
+                    logsContainer.appendChild(initialLog);
+                }
+                
+                updateCounters();
+                coordinatesElement.textContent = '(0, 0)';
+                
+                // 添加清除日志
+                addLog('move', {x: 300, y: 150}, `日志已清除 - ${new Date().toLocaleTimeString()}`);
+            }
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
