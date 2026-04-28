@@ -241,11 +241,14 @@ function launchBall() {
 }
 
 function splitBalls() {
-  if (balls.some(b => b.attached)) return; // don't split attached
+  if (balls.some(b => b.attached)) return;
+  if (balls.length >= 1024) return;
   const newBalls = [];
   for (let b of balls) {
+    if (newBalls.length >= 1024) break;
     const spd = Math.sqrt(b.dx * b.dx + b.dy * b.dy) || getBallSpeed();
     for (let offset of [-0.5, -0.15, 0.15, 0.5]) {
+      if (newBalls.length >= 1024) break;
       const angle = Math.atan2(b.dy, b.dx) + offset;
       newBalls.push(makeBall(b.x, b.y, spd * Math.cos(angle), spd * Math.sin(angle)));
     }
