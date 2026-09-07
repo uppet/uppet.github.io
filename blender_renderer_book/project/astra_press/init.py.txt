@@ -1,0 +1,246 @@
+"""Astra Press: a small, independent print-style renderer for Blender 4.5."""
+
+bl_info = {
+    "name": "Astra Press",
+    "author": "Astra",
+    "version": (0, 1, 0),
+    "blender": (4, 5, 0),
+    "location": "Render Properties > Render Engine > Astra Press",
+    "description": "CPU pigment renderer with banded light, ink contours and paper grain",
+    "category": "Render",
+}
+
+import time
+import traceback
+import bpy
+import numpy as np
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, IntProperty, PointerProperty
+from mathutils import Vector
+from . import core
+
+
+ENGINE_ID = 'ASTRA_PRESS'
+_compatible_panels = []
+
+
+def hex_linear(value):
+    return tuple(float(v) for v in core.srgb_to_linear([int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)]))
+
+
+class AstraSettings(bpy.types.PropertyGroup):
+    supersampling: EnumProperty(name="Antialiasing", items=[('1', '1x / Draft', ''), ('2', '2x / Print', '')], default='2')
+    bands: IntProperty(name="Pigment tones", default=4, min=2, max=8)
+    paper_color: FloatVectorProperty(name="Paper", subtype='COLOR', size=3, min=0, max=1, default=hex_linear('f4eddb'))
+    ink_color: FloatVectorProperty(name="Ink", subtype='COLOR', size=3, min=0, max=1, default=hex_linear('29433e'))
+    outline_width: FloatProperty(name="Ink width (px)", default=0.9, min=0, max=4)
+    hatch_amount: FloatProperty(name="Shadow hatching", default=0.24, min=0, max=1)
+    grain: FloatProperty(name="Paper grain", default=0.028, min=0, max=0.15)
+    registration: FloatProperty(name="Ink offset (px)", default=0.8, min=0, max=4)
+    shadow_size: EnumProperty(name="Shadow resolution", items=[('512', '512', ''), ('1024', '1024', ''), ('2048', '2048', '')], default='1024')
+    seed: IntProperty(name="Print seed", default=19, min=0, max=99999)
+
+
+class AstraMaterialSettings(bpy.types.PropertyGroup):
+    unlit: BoolProperty(name="Flat ink / Unlit", description="Use the base color directly, suitable for lettering", default=False)
+    outline: BoolProperty(name="Draw contours", default=True)
+
+
+def material_data(material):
+    if material is None:
+        return (0.5, 0.5, 0.5), False, True
+    color = tuple(material.diffuse_color[:3])
+    if material.use_nodes and material.node_tree:
+        outputs = [n for n in material.node_tree.nodes if n.type == 'OUTPUT_MATERIAL' and n.is_active_output]
+        if outputs and outputs[0].inputs['Surface'].is_linked:
+            node = outputs[0].inputs['Surface'].links[0].from_node
+            if node.type == 'BSDF_PRINCIPLED':
+                color = tuple(node.inputs['Base Color'].default_value[:3])
+    return color, material.astra_press.unlit, material.astra_press.outline
+
+
+def export_geometry(depsgraph, cancel):
+    blocks = []
+    for object_id, instance in enumerate(depsgraph.object_instances):
+        if cancel():
+            raise core.RenderCancelled()
+        obj = instance.object
+        if not instance.show_self or obj.hide_render or obj.type not in {'MESH', 'CURVE', 'SURFACE', 'FONT', 'META'}:
+            continue
+        mesh = obj.to_mesh(preserve_all_data_layers=False, depsgraph=depsgraph)
+        if mesh is None:
+            continue
+        try:
+            mesh.calc_loop_triangles()
+            count = len(mesh.loop_triangles)
+            if not count:
+                continue
+            vertices = np.empty(len(mesh.vertices) * 3, dtype=np.float32)
+            mesh.vertices.foreach_get('co', vertices)
+            transform = np.asarray(instance.matrix_world, dtype=np.float32)
+            world = vertices.reshape(-1, 3) @ transform[:3, :3].T + transform[:3, 3]
+            indices = np.empty(count * 3, dtype=np.int32)
+            mesh.loop_triangles.foreach_get('vertices', indices)
+            positions = world[indices.reshape(-1, 3)]
+            if len(mesh.corner_normals) == len(mesh.loops):
+                corners = np.empty(len(mesh.corner_normals) * 3, dtype=np.float32)
+                mesh.corner_normals.foreach_get('vector', corners)
+                loops = np.empty(count * 3, dtype=np.int32)
+                mesh.loop_triangles.foreach_get('loops', loops)
+                local_normals = corners.reshape(-1, 3)[loops.reshape(-1, 3)]
+                normal_matrix = np.asarray(instance.matrix_world.to_3x3().inverted_safe().transposed(), dtype=np.float32)
+                normals = core.normalized(local_normals @ normal_matrix.T)
+            else:
+                face = core.normalized(np.cross(positions[:, 1] - positions[:, 0], positions[:, 2] - positions[:, 0]))
+                normals = np.repeat(face[:, None, :], 3, axis=1)
+            slots = [material_data(slot.material) for slot in obj.material_slots] or [material_data(None)]
+            material_indices = np.empty(count, dtype=np.int32)
+            mesh.loop_triangles.foreach_get('material_index', material_indices)
+            material_indices = np.clip(material_indices, 0, len(slots) - 1)
+            colors = np.asarray([s[0] for s in slots], dtype=np.float32)[material_indices]
+            unlit = np.asarray([s[1] for s in slots], dtype=bool)[material_indices]
+            outlined = np.asarray([s[2] for s in slots], dtype=bool)[material_indices]
+            casts = np.full(count, bool(obj.get('astra_cast_shadow', True)), dtype=bool)
+            blocks.append((positions, normals, colors, np.full(count, object_id, dtype=np.int32), unlit, outlined, casts))
+        finally:
+            obj.to_mesh_clear()
+    if not blocks:
+        return core.Geometry(np.empty((0, 3, 3), dtype=np.float32), np.empty((0, 3, 3), dtype=np.float32),
+                             np.empty((0, 3), dtype=np.float32), np.empty(0, dtype=np.int32),
+                             np.empty(0, dtype=bool), np.empty(0, dtype=bool), np.empty(0, dtype=bool))
+    return core.Geometry(*(np.concatenate(values, axis=0) for values in zip(*blocks)))
+
+
+class AstraRenderEngine(bpy.types.RenderEngine):
+    bl_idname = ENGINE_ID
+    bl_label = 'Astra Press'
+    bl_use_preview = False
+    bl_use_postprocess = True
+    bl_use_shading_nodes_custom = False
+
+    def render(self, depsgraph):
+        original = depsgraph.scene
+        original['_astra_render_ok'] = False
+        start = time.perf_counter()
+        try:
+            scene = depsgraph.scene_eval
+            camera = self.camera_override or scene.camera
+            if camera is None:
+                raise ValueError('Astra Press needs an active scene camera.')
+            if camera.data.type not in {'PERSP', 'ORTHO'}:
+                raise ValueError('Astra Press supports perspective and orthographic cameras.')
+            if scene.render.use_border:
+                raise ValueError('Disable Render Region before rendering with Astra Press.')
+            factor = scene.render.resolution_percentage / 100
+            width = max(1, int(scene.render.resolution_x * factor))
+            height = max(1, int(scene.render.resolution_y * factor))
+            settings = scene.astra_press
+            style = core.Style(tuple(settings.paper_color), tuple(settings.ink_color), settings.bands,
+                               settings.outline_width, settings.hatch_amount, settings.grain,
+                               settings.registration, int(settings.shadow_size), settings.seed)
+            self.update_stats('Astra Press', 'Reading evaluated scene')
+            geometry = export_geometry(depsgraph, self.test_break)
+            projection = camera.calc_matrix_camera(depsgraph, x=width, y=height,
+                                                   scale_x=scene.render.pixel_aspect_x,
+                                                   scale_y=scene.render.pixel_aspect_y)
+            matrix = np.asarray(projection @ camera.matrix_world.normalized().inverted(), dtype=np.float32)
+            direction, energy, color = (-3, -4, 7), 1.0, (1.0, 1.0, 1.0)
+            for obj in depsgraph.objects:
+                if obj.type == 'LIGHT' and not obj.hide_render and obj.data.type == 'SUN':
+                    direction = tuple(obj.matrix_world.to_quaternion() @ Vector((0, 0, 1)))
+                    energy, color = min(obj.data.energy, 2.0), tuple(obj.data.color)
+                    break
+
+            last_update = [0.0, '']
+
+            def progress(value, message):
+                now = time.perf_counter()
+                if message != last_update[1] or now - last_update[0] > 0.3:
+                    self.update_progress(value)
+                    self.update_stats('Astra Press', message)
+                    last_update[:] = now, message
+
+            pixels = core.render(geometry, matrix, width, height, style, direction, energy, color,
+                                 int(settings.supersampling), self.test_break, progress)
+            result = self.begin_result(0, 0, width, height)
+            try:
+                result.layers[0].passes['Combined'].rect = pixels.reshape(-1, 4)
+            finally:
+                self.end_result(result)
+            elapsed = time.perf_counter() - start
+            original['_astra_render_ok'] = True
+            original['_astra_seconds'] = elapsed
+            original['_astra_triangles'] = len(geometry.positions)
+            self.update_progress(1.0)
+            self.update_stats('Astra Press', f'{len(geometry.positions):,} triangles / {elapsed:.2f}s')
+            print(f'ASTRA_RENDER_OK {width}x{height} triangles={len(geometry.positions)} seconds={elapsed:.3f}', flush=True)
+        except core.RenderCancelled:
+            self.update_stats('Astra Press', 'Cancelled')
+        except Exception as error:
+            traceback.print_exc()
+            self.report({'ERROR'}, f'Astra Press: {error}')
+
+
+class ASTRA_PT_settings(bpy.types.Panel):
+    bl_label = 'Astra Press / Print Studio'
+    bl_idname = 'ASTRA_PT_settings'
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'render'
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.render.engine == ENGINE_ID
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        settings = context.scene.astra_press
+        for name in ('supersampling', 'bands', 'paper_color', 'ink_color', 'outline_width',
+                     'hatch_amount', 'grain', 'registration', 'shadow_size', 'seed'):
+            layout.prop(settings, name)
+        layout.label(text='Light the scene with a Sun.', icon='LIGHT_SUN')
+
+
+class ASTRA_PT_material(bpy.types.Panel):
+    bl_label = 'Astra Press / Pigment'
+    bl_idname = 'ASTRA_PT_material'
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'material'
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.render.engine == ENGINE_ID and context.material is not None
+
+    def draw(self, context):
+        material = context.material
+        self.layout.prop(material, 'diffuse_color', text='Fallback pigment')
+        self.layout.prop(material.astra_press, 'unlit')
+        self.layout.prop(material.astra_press, 'outline')
+        self.layout.label(text='Also reads Principled Base Color.')
+
+
+_CLASSES = (AstraSettings, AstraMaterialSettings, AstraRenderEngine, ASTRA_PT_settings, ASTRA_PT_material)
+
+
+def register():
+    for cls in _CLASSES:
+        bpy.utils.register_class(cls)
+    bpy.types.Scene.astra_press = PointerProperty(type=AstraSettings)
+    bpy.types.Material.astra_press = PointerProperty(type=AstraMaterialSettings)
+    for panel in bpy.types.Panel.__subclasses__():
+        engines = getattr(panel, 'COMPAT_ENGINES', None)
+        if engines is not None and 'BLENDER_RENDER' in engines and ENGINE_ID not in engines:
+            if panel.__name__ not in {'VIEWLAYER_PT_filter', 'VIEWLAYER_PT_layer_passes'}:
+                engines.add(ENGINE_ID)
+                _compatible_panels.append(panel)
+
+
+def unregister():
+    for panel in _compatible_panels:
+        panel.COMPAT_ENGINES.discard(ENGINE_ID)
+    _compatible_panels.clear()
+    del bpy.types.Material.astra_press
+    del bpy.types.Scene.astra_press
+    for cls in reversed(_CLASSES):
+        bpy.utils.unregister_class(cls)

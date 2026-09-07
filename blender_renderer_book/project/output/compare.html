@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Astra Press · 渲染对比</title>
+<style>
+  :root { color-scheme: light; font-family: system-ui, sans-serif; color: #29433e; background: #f4eddb; }
+  body { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; }
+  h1 { font-size: 22px; font-weight: 500; letter-spacing: .12em; }
+  p { font-size: 14px; line-height: 1.7; }
+  .comparison { --split: 50%; position: relative; aspect-ratio: 4/3; margin: 20px 0; box-shadow: 0 12px 50px #29433e18; }
+  .comparison img { position: absolute; width: 100%; height: 100%; display: block; }
+  .astra { clip-path: inset(0 calc(100% - var(--split)) 0 0); }
+  .divider { position: absolute; left: var(--split); top: 0; bottom: 0; width: 2px; background: #29433e; pointer-events: none; }
+  .handle { position: absolute; top: 50%; left: var(--split); transform: translate(-50%, -50%); background: #29433e; color: #f4eddb; border-radius: 50%; width: 42px; height: 42px; display: grid; place-items: center; pointer-events: none; }
+  input[type=range] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+  .comparison:focus-within { outline: 3px solid #c56347; outline-offset: 4px; }
+  .labels { display: flex; justify-content: space-between; font-size: 13px; }
+  a { color: inherit; text-underline-offset: 4px; }
+  @media (max-width: 650px) { header { display: block; } body { padding: 16px; } }
+</style>
+<header><h1>ASTRA / PRESS</h1><p>同一场景 · 同一相机 · 同一色彩管理</p></header>
+<div class="labels"><span>Astra Press / 版画着色</span><span>Cycles / 32 samples + denoising</span></div>
+<div class="comparison" id="comparison">
+  <img src="cycles_reference.png" alt="Cycles 渲染结果">
+  <img class="astra" src="astra_press.png" alt="Astra Press 渲染结果">
+  <div class="divider"></div><div class="handle">↔</div>
+  <input type="range" min="0" max="100" value="50" aria-label="Astra Press 图像覆盖比例" id="slider">
+</div>
+<p>拖动图像上的分界线，或选中后使用方向键，比较墨线、分层色块、阴影排线与纸纹。</p>
+<p><a href="astra_press.png">Astra 原图</a> · <a href="cycles_reference.png">Cycles 原图</a> · <a href="../README.md">项目说明</a></p>
+<script>
+  document.getElementById('slider').addEventListener('input', event => {
+    document.getElementById('comparison').style.setProperty('--split', `${event.target.value}%`);
+  });
+</script>
+</html>

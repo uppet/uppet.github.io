@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="从 Astra Press 的完整源码和真实渲染产物出发，学习 Blender 渲染器、光栅化、色彩、阴影、测试与原生内核。离线中文交互书。">
+  <title>自己写一个 Blender 渲染器 · Astra Press</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="data.js"></script>
+  <script defer src="labs.js"></script>
+  <script defer src="reader.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#reading">跳到正文</a>
+  <div id="scroll-progress" aria-hidden="true"></div>
+  <aside id="sidebar" aria-label="全书目录">
+    <a class="brand" href="#ch/00-opening"><span class="brand-mark">a<span>·</span></span><span>ASTRA<br><small>RENDERER FIELDNOTES</small></span></a>
+    <p class="sidebar-title">自己写一个<br>Blender 渲染器</p>
+    <button id="search-open" class="search-button"><span>⌕ 搜索全书与源码</span><kbd>Ctrl K</kbd></button>
+    <nav id="book-nav"></nav>
+    <div class="sidebar-bottom"><span id="completion-count">0 / 27 已读</span><span>离线实作版 01</span></div>
+  </aside>
+  <div id="scrim" hidden></div>
+  <div class="reader-shell">
+    <header class="toolbar">
+      <div class="toolbar-left"><button id="menu-toggle" aria-label="打开目录" aria-expanded="false">☰</button><span id="breadcrumb">从一张图出发</span></div>
+      <div class="toolbar-actions">
+        <a href="#ch/25-archive" class="archive-link">源码与产物 ↗</a>
+        <button id="font-minus" aria-label="缩小正文字号">A−</button><button id="font-plus" aria-label="放大正文字号">A+</button>
+        <button id="theme-toggle" aria-label="切换深色模式">◐</button>
+        <button id="print" aria-label="打印当前章节">打印</button>
+      </div>
+    </header>
+    <main id="reading" tabindex="-1">
+      <div id="article-layout"><article id="article"><noscript><h1>自己写一个 Blender 渲染器</h1><p>请启用 JavaScript 阅读交互版。所有资源都在本地，不需要联网。章节 Markdown 随离线整本 ZIP 提供。</p></noscript></article><aside id="chapter-toc" aria-label="本章目录"></aside></div>
+    </main>
+    <footer class="site-footer"><span>ASTRA PRESS / 从代码到图像</span><a href="astra-renderer-book.zip" download>下载离线整本 ZIP ↓</a></footer>
+  </div>
+  <dialog id="search-dialog" aria-labelledby="search-title">
+    <div class="search-dialog-top"><h2 id="search-title">在书中寻找</h2><button id="search-close" aria-label="关闭搜索">Esc</button></div>
+    <input id="search-input" type="search" aria-label="搜索章节与源代码" placeholder="例如：透视校正、register、颜色空间" autocomplete="off">
+    <p id="search-summary" role="status"></p><div id="search-results"></div>
+  </dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

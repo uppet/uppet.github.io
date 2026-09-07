@@ -1,0 +1,128 @@
+{
+  "title": "自己写一个 Blender 渲染器",
+  "directory": "blender_renderer_book",
+  "chapters": 27,
+  "snapshotFiles": 15,
+  "downloadAliases": {
+    "project/.gitignore": "project/gitignore.txt",
+    "project/README.md": "project/README.md.txt",
+    "project/astra_press/__init__.py": "project/astra_press/init.py.txt"
+  },
+  "files": [
+    {
+      "path": "astra-press-project.zip",
+      "bytes": 4985157,
+      "sha256": "8bbb7fa244646165c129ca8d1f6c402e459a720cba0ab1719de2d438ada3bcb1"
+    },
+    {
+      "path": "astra-renderer-book.zip",
+      "bytes": 11717490,
+      "sha256": "5fc8600a5d9dfe40b4633c55cfb20b2670202ef8b3ae4a99fcabd12e846fde93"
+    },
+    {
+      "path": "data.js",
+      "bytes": 378099,
+      "sha256": "743541cba206a4380e8ef9c038b1fc806714e826333f61dfafe29298d5907733"
+    },
+    {
+      "path": "index.html",
+      "bytes": 3027,
+      "sha256": "53e5bb3188abff499862886d6adb6fe9c7b262848e308f8421fe6cbbe57a3c20"
+    },
+    {
+      "path": "labs.js",
+      "bytes": 25722,
+      "sha256": "bbb5cb8b4274b4afecae97ed4ccb0b47507a1287cc6a3da24c10f52493de87d8"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 3506,
+      "sha256": "53b0830252e6e9a418c77d703031516842aa238accd21416f89c1e5166910d0d"
+    },
+    {
+      "path": "project/README.md.txt",
+      "bytes": 4761,
+      "sha256": "ac51fc5cc2b72c9e70dbd432aa98395f306dfe4eeb1b81b006db356a85e91113"
+    },
+    {
+      "path": "project/astra_press.zip",
+      "bytes": 11133,
+      "sha256": "0e9ad0ce255f0637c7c81d0fa253ec5c7cb2d1333ef439513ae95f6455a6c786"
+    },
+    {
+      "path": "project/astra_press/core.py",
+      "bytes": 13021,
+      "sha256": "80f4c9b1b10aa5b0e7347fd6cc5803747ba52d99f7d704b6c351fb3d1fdfbbce"
+    },
+    {
+      "path": "project/astra_press/init.py.txt",
+      "bytes": 12066,
+      "sha256": "eb8579e482be916ff6f14c4a8165674db1eaf1147fd2b47bf02a31c38ee781fa"
+    },
+    {
+      "path": "project/gitignore.txt",
+      "bytes": 46,
+      "sha256": "7744bcd55d0e14672aba23dd6372bb06bd82b406ac35265c06248750844b98e8"
+    },
+    {
+      "path": "project/output/astra_press.png",
+      "bytes": 1529001,
+      "sha256": "dd7b18989903d25991bbcfa7ef5b17c870f5f01d37b8a420d29db15432589d95"
+    },
+    {
+      "path": "project/output/astra_press_report.json",
+      "bytes": 493,
+      "sha256": "e25e60730ae9c9be1f5a5949b3d497fe80b8c89c42528eb49553de8a0219bbac"
+    },
+    {
+      "path": "project/output/checks/package_report.json",
+      "bytes": 172,
+      "sha256": "c5088f5bf4a1708342404ed7eeace9884666d0051c901ba7d72679c86907b70b"
+    },
+    {
+      "path": "project/output/checks/reopened_scene.png",
+      "bytes": 94358,
+      "sha256": "ee1fa39cee39d0ae6e9af9a8f7d72375b55cfc4ae09d322bc9513a0072408cb6"
+    },
+    {
+      "path": "project/output/compare.html",
+      "bytes": 2649,
+      "sha256": "25b428a9eb0b2750a52d5a7482ee163584d80f4ef5e4dd3b1cf95cad0c50b4cb"
+    },
+    {
+      "path": "project/output/cycles_reference.png",
+      "bytes": 1601610,
+      "sha256": "e616e6b1e1be01ad72f0580401fea22444d885be6280cc2cc5aa891d99a2dd47"
+    },
+    {
+      "path": "project/output/quiet_objects.blend",
+      "bytes": 2590752,
+      "sha256": "c87c211776b55e68aef0ba8ad0305089a2b8f76201eb0e935104108b84e52461"
+    },
+    {
+      "path": "project/render_demo.py",
+      "bytes": 11985,
+      "sha256": "5ff84fd97444f0e0c78e705fa9514e8b0083fa929340abffbde6e850323808a1"
+    },
+    {
+      "path": "project/tests/verify_package.py",
+      "bytes": 2307,
+      "sha256": "bbcde694d265f5dd970897797fd786272751dbd1ac130dd10fe0d696b678ad6f"
+    },
+    {
+      "path": "project/tests/verify_renderer.py",
+      "bytes": 6660,
+      "sha256": "7487823703d1a37c0b360e46090d788dc1abb668c816bad8a879134c97ec5a49"
+    },
+    {
+      "path": "reader.js",
+      "bytes": 17240,
+      "sha256": "0b283401da5124ca43e7e47fa34f11a2e0adfc69ecd963af27c18b44f349686e"
+    },
+    {
+      "path": "style.css",
+      "bytes": 19017,
+      "sha256": "97ed67aaceb2119bcff72c69aa231975be9e2cae9e9713b77016f00e862c5ca7"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "blender_version": "4.5.1 LTS",
+  "engine": "ASTRA_PRESS",
+  "astra": {
+    "path": "D:\\bld\\astra_render\\output\\astra_press.png",
+    "seconds": 5.554,
+    "dimensions": [
+      1440,
+      1080
+    ],
+    "rgb_stddev": 0.1586
+  },
+  "triangles": 19504,
+  "core_seconds": 5.425,
+  "cycles": {
+    "path": "D:\\bld\\astra_render\\output\\cycles_reference.png",
+    "seconds": 4.402,
+    "dimensions": [
+      1440,
+      1080
+    ],
+    "rgb_stddev": 0.1213
+  }
+}
