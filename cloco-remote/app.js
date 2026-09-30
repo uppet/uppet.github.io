@@ -477,7 +477,7 @@ function status(text, connected = false) {
 }
 function controls() {
   const connected = Boolean(client?.ready);
-  for (const id of ["prompt", "add-file", "record-audio", "record-video"]) $(id).disabled = !connected || uploading;
+  for (const id of ["prompt", "add-file", "record-audio", "record-video"]) $(id).disabled = !connected || uploading || Boolean(openingSession);
   $("record-audio").disabled ||= requestingMedia;
   $("record-video").disabled ||= requestingMedia;
   $("send").disabled = !connected || Boolean(activeTask) || uploading || Boolean(recorder) || requestingMedia || Boolean(openingSession);
@@ -835,6 +835,7 @@ $("composer").onsubmit = async (event) => {
     }));
     const taskId = randomId();
     activeTask = taskId;
+    controls();
     const entry = message("user", text);
     for (let index = 0; index < attachments.length; index++) entry.media.append(mediaCard(pendingFiles[index], attachments[index].name, attachments[index].mime));
     message("assistant", "", taskId);
