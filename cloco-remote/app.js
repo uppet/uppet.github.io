@@ -344,7 +344,7 @@ var RemoteClient = class {
       this.pending.delete(message2.id);
       if (message2.ok) pending.resolve(message2.result);
       else pending.reject(new Error(message2.error || "\u64CD\u4F5C\u5931\u8D25"));
-    } else if (message2.type === "event") this.onEvent?.(message2);
+    } else if (message2.type === "event" || message2.type === "session-update") this.onEvent?.(message2);
   }
   async request(method, params = {}) {
     if (!this.ready || this.closed) throw new Error("\u8BF7\u5148\u8FDE\u63A5\u4E3B\u673A");
@@ -459,6 +459,9 @@ var openingSession;
 var sessionEvents = [];
 var recordingRequest = 0;
 var requestingMedia = false;
+var renamingSession;
+var savingSessionName = false;
+var canRenameSession = false;
 var pendingFiles = [];
 var tasks = /* @__PURE__ */ new Map();
 var objectUrls = /* @__PURE__ */ new Set();
@@ -477,6 +480,7 @@ function status(text, connected = false) {
 }
 function controls() {
   const connected = Boolean(client?.ready);
+  if (!connected) closeSessionName();
   for (const id of ["prompt", "add-file", "record-audio", "record-video"]) $(id).disabled = !connected || uploading || Boolean(openingSession);
   $("record-audio").disabled ||= requestingMedia;
   $("record-video").disabled ||= requestingMedia;
@@ -484,8 +488,24 @@ function controls() {
   $("cancel").hidden = !activeTask;
   $("cancel").disabled = !connected;
   $("session-panel").hidden = !connected;
-  $("new-session").disabled = uploading || Boolean(activeTask) || Boolean(openingSession);
-  $("sessions").disabled = uploading || Boolean(openingSession);
+  $("new-session").disabled = uploading || Boolean(activeTask) || Boolean(openingSession) || savingSessionName;
+  $("sessions").disabled = uploading || Boolean(openingSession) || savingSessionName;
+  $("rename-session").disabled = !connected || !sessionId || uploading || Boolean(openingSession) || savingSessionName;
+  $("session-name").disabled = savingSessionName;
+  $("save-session-name").disabled = !connected || savingSessionName || !$("session-name").value.trim();
+  $("cancel-session-name").disabled = savingSessionName;
+}
+function closeSessionName() {
+  renamingSession = null;
+  $("session-name-form").hidden = true;
+}
+function applySessionName(info) {
+  const option = [...$("sessions").options].find((option2) => option2.value === info.id);
+  if (option) option.textContent = info.name;
+  if (sessionId === info.id) {
+    $("conversation-name").textContent = info.name;
+    $("conversation-name").title = info.name;
+  }
 }
 function scroll() {
   $("messages").scrollTop = $("messages").scrollHeight;
@@ -590,14 +610,17 @@ function addFiles(files) {
   }
 }
 async function openSession(id) {
+  closeSessionName();
   openingSession = id;
   sessionEvents = [];
   controls();
   try {
     const info = await client.request("session.open", { id });
     sessionId = id;
+    canRenameSession = info.capabilities?.sessionRename === true;
     localStorage.setItem(`cloco-session-${decodeInvite(token).room}`, id);
-    $("conversation-name").textContent = info.name;
+    $("conversation-name").textContent = [...$("sessions").options].find((option) => option.value === id)?.textContent || info.name;
+    $("conversation-name").title = $("conversation-name").textContent;
     $("sessions").value = id;
     $("messages").replaceChildren();
     tasks.clear();
@@ -662,9 +685,14 @@ async function refreshSessions() {
     option.textContent = row.name;
     $("sessions").append(option);
   }
+  if (rows.some((row) => row.id === sessionId)) $("sessions").value = sessionId;
   return rows;
 }
 function handleEvent(event) {
+  if (event.type === "session-update") {
+    applySessionName({ id: event.sessionId, name: event.name });
+    return;
+  }
   if (openingSession) {
     if (event.sessionId === openingSession) sessionEvents.push(event);
     return;
@@ -712,6 +740,8 @@ ${JSON.stringify(progress.result)}` : progress.delta || JSON.stringify(progress.
   scroll();
 }
 async function connect(value, restore = true) {
+  closeSessionName();
+  canRenameSession = false;
   client?.disconnect();
   token = value;
   client = new RemoteClient({ relayOnly: $("relay-only").checked, onStatus: (text) => status(text), onEvent: handleEvent, onDisconnect: () => {
@@ -796,6 +826,55 @@ $("new-session").onclick = async () => {
     await openSession(info.id);
   } catch (err) {
     error(err.message);
+  }
+};
+$("rename-session").onclick = () => {
+  if (!canRenameSession) {
+    error("\u5F53\u524D\u4E3B\u673A\u7248\u672C\u4E0D\u652F\u6301\u4F1A\u8BDD\u6539\u540D\uFF0C\u8BF7\u66F4\u65B0\u4E3B\u673A\u5E76\u91CD\u65B0\u542F\u52A8 remote\u3002");
+    return;
+  }
+  error("");
+  renamingSession = sessionId;
+  $("session-name").value = $("conversation-name").textContent;
+  $("session-name-form").hidden = false;
+  controls();
+  $("session-name").focus();
+  $("session-name").select();
+};
+$("session-name").oninput = controls;
+$("session-name").onkeydown = (event) => {
+  if (event.key === "Escape" && !savingSessionName) {
+    closeSessionName();
+    controls();
+    $("rename-session").focus();
+  }
+};
+$("cancel-session-name").onclick = () => {
+  closeSessionName();
+  controls();
+  $("rename-session").focus();
+};
+$("session-name-form").onsubmit = async (event) => {
+  event.preventDefault();
+  if (!renamingSession || savingSessionName || !client?.ready) return;
+  const id = renamingSession, name = $("session-name").value.trim();
+  if (!name || name.length > 100) {
+    error("\u4F1A\u8BDD\u540D\u79F0\u987B\u4E3A 1\u2013100 \u4E2A\u5B57\u7B26");
+    return;
+  }
+  savingSessionName = true;
+  controls();
+  error("");
+  try {
+    const info = await client.request("session.rename", { id, name });
+    applySessionName(info);
+    closeSessionName();
+    $("rename-session").focus();
+  } catch (err) {
+    error(err.message);
+  } finally {
+    savingSessionName = false;
+    controls();
   }
 };
 $("load-history").onclick = async () => {

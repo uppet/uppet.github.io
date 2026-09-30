@@ -32,7 +32,18 @@
         <h2 id="session-heading">会话</h2>
         <label class="sr-only" for="sessions">选择会话</label>
         <select id="sessions"></select>
-        <button id="new-session" type="button">新建会话</button>
+        <div class="session-actions">
+          <button id="new-session" type="button">新建会话</button>
+          <button id="rename-session" type="button">重命名</button>
+        </div>
+        <form id="session-name-form" hidden>
+          <label for="session-name">会话名称</label>
+          <input id="session-name" type="text" autocomplete="off" maxlength="100" required>
+          <div class="session-name-actions">
+            <button id="save-session-name" class="primary" type="submit">保存名称</button>
+            <button id="cancel-session-name" type="button">取消</button>
+          </div>
+        </form>
         <p class="hint">任务在你的电脑执行。网页关闭后，正在执行的任务仍会继续。</p>
       </section>
       <div class="sidebar-footer">代码与模型密钥留在你的电脑。</div>
