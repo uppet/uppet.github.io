@@ -91,7 +91,8 @@ var Signaling = class {
       const url = new URL(this.invite.signal);
       if (this.invite.key) url.searchParams.set("key", this.invite.key);
       const ws = this.ws = new this.WebSocketImpl(url.toString());
-      let welcomed = false;
+      let subscribed = false;
+      const subscribeId = randomId();
       const timer = setTimeout(() => {
         ws.close();
         reject(new Error("\u4FE1\u4EE4\u670D\u52A1\u8FDE\u63A5\u8D85\u65F6"));
@@ -102,12 +103,13 @@ var Signaling = class {
           if (text.length > 90 * 1024) return;
           const message2 = JSON.parse(text);
           if (message2.type === "welcome") {
-            welcomed = true;
-            clearTimeout(timer);
             this.peerId = message2.peerId;
             this.iceServers = message2.metadata?.iceServers || message2.iceServers || [];
-            this.write({ type: "subscribe", channel: this.invite.room });
+            this.write({ type: "subscribe", channel: this.invite.room, requestId: subscribeId });
             this.onWelcome?.(message2);
+          } else if (message2.type === "ack" && message2.requestId === subscribeId && !subscribed) {
+            subscribed = true;
+            clearTimeout(timer);
             if (typeof ws.ping === "function") this.heartbeat = setInterval(() => {
               if (ws.readyState === 1) ws.ping();
             }, 3e4);
@@ -120,17 +122,22 @@ var Signaling = class {
             } catch {
               return;
             }
+            if (data.to && data.to !== this.peerId) return;
             await this.onSignal?.(data, message2.from);
           } else if (message2.type === "error") {
             this.onStatus?.("error", message2.message || message2.code || "\u4FE1\u4EE4\u670D\u52A1\u62D2\u7EDD\u8FDE\u63A5");
-            if (!welcomed) reject(new Error("\u4FE1\u4EE4\u670D\u52A1\u62D2\u7EDD\u8FDE\u63A5"));
+            if (!subscribed) {
+              clearTimeout(timer);
+              reject(new Error(`\u4FE1\u4EE4\u670D\u52A1\u62D2\u7EDD\u8BA2\u9605\uFF08${message2.code || "permission_denied"}\uFF09\uFF0C\u8BF7\u68C0\u67E5 key \u7684\u623F\u95F4\u6743\u9650`));
+              ws.close();
+            }
           }
         } catch (error2) {
           this.onStatus?.("error", error2.message);
         }
       };
       ws.onerror = () => {
-        if (!welcomed) {
+        if (!subscribed) {
           clearTimeout(timer);
           reject(new Error("\u65E0\u6CD5\u8FDE\u63A5\u4FE1\u4EE4\u670D\u52A1\uFF0C\u8BF7\u68C0\u67E5\u7F51\u7EDC\u548C publishable key"));
         }
@@ -138,7 +145,7 @@ var Signaling = class {
       ws.onclose = () => {
         clearTimeout(timer);
         clearInterval(this.heartbeat);
-        if (!welcomed) reject(new Error("\u4FE1\u4EE4\u670D\u52A1\u8FDE\u63A5\u88AB\u5173\u95ED"));
+        if (!subscribed) reject(new Error("\u4FE1\u4EE4\u670D\u52A1\u8FDE\u63A5\u88AB\u5173\u95ED"));
         if (!this.closed) this.onStatus?.("offline");
       };
     });
@@ -148,8 +155,8 @@ var Signaling = class {
   }
   async send(data, to) {
     if (this.ws?.readyState !== 1) throw new Error("Signaling disconnected");
-    const encrypted = await seal(this.invite.secret, this.invite.room, data);
-    this.write(to ? { type: "send", to, data: encrypted } : { type: "publish", channel: this.invite.room, data: encrypted });
+    const encrypted = await seal(this.invite.secret, this.invite.room, to ? { ...data, to } : data);
+    this.write({ type: "publish", channel: this.invite.room, data: encrypted });
   }
   close() {
     this.closed = true;
@@ -169,6 +176,14 @@ function validateIceServers(servers) {
     return { urls, ...server.username ? { username: server.username } : {}, ...server.credential ? { credential: server.credential } : {} };
   });
 }
+function turnTransports(servers) {
+  const available = /* @__PURE__ */ new Set();
+  for (const server of servers) for (const url of Array.isArray(server.urls) ? server.urls : [server.urls]) {
+    if (url.startsWith("turns:")) available.add("tls");
+    else if (url.startsWith("turn:")) available.add(url.includes("transport=tcp") ? "tcp" : "udp");
+  }
+  return ["tls", "tcp", "udp"].filter((value) => available.has(value));
+}
 
 // src/remote/client.js
 var RemoteClient = class {
@@ -177,8 +192,22 @@ var RemoteClient = class {
     this.pending = /* @__PURE__ */ new Map();
   }
   async connect(token2) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      this.turnAttempt = attempt;
+      try {
+        return await this.connectAttempt(token2);
+      } catch (error2) {
+        if (attempt + 1 >= (this.availableTurnTransports?.length || 1)) throw error2;
+        this.onStatus?.("\u5F53\u524D\u7F51\u7EDC\u901A\u8DEF\u5931\u8D25\uFF0C\u6B63\u5728\u5C1D\u8BD5\u5176\u4ED6 TURN \u4F20\u8F93");
+      }
+    }
+  }
+  async connectAttempt(token2) {
     this.invite = typeof token2 === "string" ? decodeInvite(token2) : token2;
     this.connectionId = randomId();
+    this.offerSent = false;
+    this.answerHash = void 0;
+    this.remoteReady = false;
     this.closed = false;
     this.onStatus?.("\u6B63\u5728\u8FDE\u63A5\u4FE1\u4EE4\u670D\u52A1");
     this.signal = new Signaling(this.invite, { onSignal: (data, from) => this.receiveSignal(data, from), onStatus: (status2, error2) => {
@@ -194,8 +223,12 @@ var RemoteClient = class {
     try {
       await this.signal.send({ kind: "probe", connectionId: this.connectionId });
       const info = await bootstrap;
+      this.availableTurnTransports = Array.isArray(info.turnTransports) ? info.turnTransports.filter((value) => ["tls", "tcp", "udp"].includes(value)) : [];
+      this.selectedTurnTransport = this.availableTurnTransports[this.turnAttempt];
       this.hostPeerId = info.from;
-      this.pc = new RTCPeerConnection({ iceServers: validateIceServers(info.iceServers || this.signal.iceServers), iceTransportPolicy: this.relayOnly ? "relay" : "all" });
+      const iceServers = validateIceServers(info.iceServers || this.signal.iceServers);
+      if (this.relayOnly && !turnTransports(iceServers).length) throw new Error("\u4E3B\u673A\u6CA1\u6709 TURN \u914D\u7F6E\uFF0C\u8BF7\u542F\u7528 Metered TURN \u81EA\u52A8\u4E0B\u53D1\uFF0C\u6216\u5728\u4E3B\u673A\u914D\u7F6E\u5176\u4ED6 TURN \u670D\u52A1");
+      this.pc = new RTCPeerConnection({ iceServers, iceTransportPolicy: this.relayOnly ? "relay" : "all" });
     } catch (error2) {
       this.disconnect();
       throw error2;
@@ -243,11 +276,18 @@ var RemoteClient = class {
       await this.pc.setLocalDescription(offer);
       this.offerHash = await sha256(this.pc.localDescription.sdp);
       this.onStatus?.("\u7B49\u5F85\u4E3B\u673A\u5E94\u7B54");
-      await this.signal.send({ kind: "offer", connectionId: this.connectionId, sdp: this.pc.localDescription.sdp }, this.hostPeerId);
+      await this.signal.send({ kind: "offer", connectionId: this.connectionId, sdp: this.pc.localDescription.sdp, turnTransport: this.selectedTurnTransport }, this.hostPeerId);
       this.offerSent = true;
       for (const candidate of this.candidates.splice(0)) await this.signal.send(candidate, this.hostPeerId);
       const info = await ready;
-      this.heartbeat = setInterval(() => this.request("ping").catch(() => this.connectionLost()), 2e4);
+      this.lastReceived = Date.now();
+      this.heartbeat = setInterval(() => {
+        if (Date.now() - this.lastReceived > 15e3) {
+          this.connectionLost();
+          return;
+        }
+        sendChannel(this.channel, { type: "heartbeat" }).catch(() => this.connectionLost());
+      }, 5e3);
       return info;
     } catch (error2) {
       this.disconnect();
@@ -278,9 +318,18 @@ var RemoteClient = class {
   }
   async receiveChannel(text) {
     const message2 = parseMessage(text);
+    this.lastReceived = Date.now();
+    const generation = this.connectionId;
+    if (message2.type === "heartbeat") return;
+    if (message2.type === "closed" && message2.connectionId === generation) {
+      this.connectionLost();
+      return;
+    }
+    if ((message2.type === "challenge" || message2.type === "ready") && message2.connectionId !== generation) return;
     if (message2.type === "challenge") {
       const authText = `${VERSION}:${this.connectionId}:${message2.challenge}:${this.offerHash}:${this.answerHash}`;
       if (message2.v !== VERSION || !await verify(this.invite.secret, `host:${authText}`, message2.proof)) throw new Error("\u4E3B\u673A\u8EAB\u4EFD\u9A8C\u8BC1\u5931\u8D25");
+      if (this.closed || generation !== this.connectionId) return;
       await sendChannel(this.channel, { type: "auth", proof: await sign(this.invite.secret, `client:${authText}`) });
     } else if (message2.type === "ready") {
       if (message2.v !== VERSION) throw new Error("\u5BA2\u6237\u7AEF\u4E0E\u4E3B\u673A\u534F\u8BAE\u7248\u672C\u4E0D\u4E00\u81F4");
@@ -368,9 +417,10 @@ var RemoteClient = class {
   }
   connectionLost() {
     if (this.closed) return;
+    const wasReady = this.ready;
     this.readyReject?.(new Error("\u8FDE\u63A5\u5DF2\u65AD\u5F00"));
     this.disconnect();
-    this.onDisconnect?.();
+    if (wasReady) this.onDisconnect?.();
   }
   disconnect() {
     this.closed = true;
@@ -379,6 +429,10 @@ var RemoteClient = class {
     clearTimeout(this.readyTimer);
     clearTimeout(this.lostTimer);
     this.signal?.close();
+    if (this.channel) this.channel.onclose = null;
+    if (this.channel) this.channel.onmessage = null;
+    if (this.pc) this.pc.onconnectionstatechange = null;
+    if (this.pc) this.pc.onicecandidate = null;
     this.channel?.close();
     this.pc?.close();
     for (const pending of this.pending.values()) {
@@ -401,6 +455,10 @@ var recorder;
 var stream;
 var recordingTimer;
 var historyOffset = 0;
+var openingSession;
+var sessionEvents = [];
+var recordingRequest = 0;
+var requestingMedia = false;
 var pendingFiles = [];
 var tasks = /* @__PURE__ */ new Map();
 var objectUrls = /* @__PURE__ */ new Set();
@@ -420,11 +478,14 @@ function status(text, connected = false) {
 function controls() {
   const connected = Boolean(client?.ready);
   for (const id of ["prompt", "add-file", "record-audio", "record-video"]) $(id).disabled = !connected || uploading;
-  $("send").disabled = !connected || Boolean(activeTask) || uploading || Boolean(recorder);
+  $("record-audio").disabled ||= requestingMedia;
+  $("record-video").disabled ||= requestingMedia;
+  $("send").disabled = !connected || Boolean(activeTask) || uploading || Boolean(recorder) || requestingMedia || Boolean(openingSession);
   $("cancel").hidden = !activeTask;
+  $("cancel").disabled = !connected;
   $("session-panel").hidden = !connected;
-  $("new-session").disabled = uploading || Boolean(activeTask);
-  $("sessions").disabled = uploading;
+  $("new-session").disabled = uploading || Boolean(activeTask) || Boolean(openingSession);
+  $("sessions").disabled = uploading || Boolean(openingSession);
 }
 function scroll() {
   $("messages").scrollTop = $("messages").scrollHeight;
@@ -529,30 +590,68 @@ function addFiles(files) {
   }
 }
 async function openSession(id) {
-  const info = await client.request("session.open", { id });
-  sessionId = id;
-  localStorage.setItem(`cloco-session-${decodeInvite(token).room}`, id);
-  $("conversation-name").textContent = info.name;
-  $("sessions").value = id;
-  $("messages").replaceChildren();
-  tasks.clear();
-  const history = await client.request("session.history");
-  historyOffset = history.offset;
-  $("load-history").hidden = historyOffset === 0;
-  for (const row of history.items) {
-    const entry = message(row.role, row.text || "", row.role === "assistant" ? row.taskId : void 0);
-    for (const attachment of row.attachments || []) displayAttachment(entry, attachment);
-    if (row.truncated) {
-      const p = document.createElement("p");
-      p.className = "notice";
-      p.textContent = "\u957F\u6D88\u606F\u5DF2\u622A\u53D6\uFF0C\u5B8C\u6574\u8BB0\u5F55\u4FDD\u5B58\u5728\u4E3B\u673A\u3002";
-      entry.article.append(p);
-    }
-  }
-  activeTask = info.active?.taskId || null;
-  if (activeTask) message("assistant", info.active.text, activeTask);
+  openingSession = id;
+  sessionEvents = [];
   controls();
-  scroll();
+  try {
+    const info = await client.request("session.open", { id });
+    sessionId = id;
+    localStorage.setItem(`cloco-session-${decodeInvite(token).room}`, id);
+    $("conversation-name").textContent = info.name;
+    $("sessions").value = id;
+    $("messages").replaceChildren();
+    tasks.clear();
+    const history = await client.request("session.history");
+    historyOffset = history.offset;
+    $("load-history").hidden = historyOffset === 0;
+    for (const row of history.items) {
+      const entry = message(row.role, row.text || "", row.role === "assistant" ? row.taskId : void 0);
+      for (const attachment of row.attachments || []) displayAttachment(entry, attachment);
+      expandMessage(entry, row);
+    }
+    activeTask = history.active?.taskId || null;
+    if (activeTask) {
+      const entry = message("assistant", history.active.text, activeTask);
+      for (const attachment of history.active.attachments || []) displayAttachment(entry, attachment);
+    }
+    const queued = sessionEvents;
+    openingSession = null;
+    sessionEvents = [];
+    for (const event of queued) if (event.sequence > history.sequence) handleEvent(event);
+    scroll();
+  } finally {
+    openingSession = null;
+    sessionEvents = [];
+    controls();
+  }
+}
+function expandMessage(entry, row) {
+  if (!row.truncated) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "\u67E5\u770B\u5B8C\u6574\u6D88\u606F";
+  entry.article.append(button);
+  const sourceSession = sessionId;
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      let text = "", offset = 0, total = 1;
+      while (offset < total) {
+        if (sessionId !== sourceSession) return;
+        const part = await client.request("session.message", { id: row.id, offset });
+        if (part.offset !== offset || part.next < offset || part.next === offset && part.next < part.total) throw new Error("\u6D88\u606F\u6570\u636E\u4E0D\u5B8C\u6574");
+        text += part.text;
+        offset = part.next;
+        total = part.total;
+      }
+      entry.text = text;
+      content(entry.body, text);
+      button.remove();
+    } catch (err) {
+      error(err.message);
+      button.disabled = false;
+    }
+  };
 }
 async function refreshSessions() {
   const rows = await client.request("session.list");
@@ -566,6 +665,10 @@ async function refreshSessions() {
   return rows;
 }
 function handleEvent(event) {
+  if (openingSession) {
+    if (event.sessionId === openingSession) sessionEvents.push(event);
+    return;
+  }
   if (event.sessionId !== sessionId) return;
   let entry = tasks.get(event.taskId);
   if (!entry) entry = message("assistant", "", event.taskId);
@@ -612,6 +715,7 @@ async function connect(value, restore = true) {
   client?.disconnect();
   token = value;
   client = new RemoteClient({ relayOnly: $("relay-only").checked, onStatus: (text) => status(text), onEvent: handleEvent, onDisconnect: () => {
+    stopRecording();
     controls();
     reconnect();
   } });
@@ -697,12 +801,18 @@ $("new-session").onclick = async () => {
 $("load-history").onclick = async () => {
   try {
     const offset = Math.max(0, historyOffset - 5);
-    const history = await client.request("session.history", { offset });
     const first = $("messages").firstChild;
-    for (const row of history.items.slice(0, historyOffset - offset)) {
-      const entry = message(row.role, row.text || "");
-      $("messages").insertBefore(entry.article, first);
-      for (const attachment of row.attachments || []) displayAttachment(entry, attachment);
+    let cursor = offset;
+    while (cursor < historyOffset) {
+      const history = await client.request("session.history", { offset: cursor });
+      if (history.next <= cursor) throw new Error("\u5386\u53F2\u6D88\u606F\u8FC7\u5927\uFF0C\u65E0\u6CD5\u52A0\u8F7D");
+      for (const row of history.items.slice(0, historyOffset - cursor)) {
+        const entry = message(row.role, row.text || "");
+        $("messages").insertBefore(entry.article, first);
+        for (const attachment of row.attachments || []) displayAttachment(entry, attachment);
+        expandMessage(entry, row);
+      }
+      cursor = history.next;
     }
     historyOffset = offset;
     $("load-history").hidden = !offset;
@@ -761,11 +871,19 @@ $("prompt").addEventListener("paste", (event) => {
   }
 });
 async function startRecording(video) {
-  if (recorder) return;
+  if (recorder || requestingMedia || !client?.ready) return;
+  const request = ++recordingRequest;
+  requestingMedia = true;
+  controls();
   error("");
   try {
     if (!navigator.mediaDevices?.getUserMedia || !globalThis.MediaRecorder) throw new Error("\u6B64\u6D4F\u89C8\u5668\u4E0D\u652F\u6301\u5F55\u5236\uFF0C\u8BF7\u4E0A\u4F20\u5DF2\u6709\u97F3\u89C6\u9891\u6587\u4EF6\uFF1B\u7F51\u9875\u9700\u8981 HTTPS");
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video });
+    const media = await navigator.mediaDevices.getUserMedia({ audio: true, video });
+    if (request !== recordingRequest || !client?.ready) {
+      media.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    stream = media;
     const types = video ? ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"] : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
     const mimeType = types.find((type) => MediaRecorder.isTypeSupported(type));
     recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
@@ -801,11 +919,18 @@ async function startRecording(video) {
     recordingTimer = setTimeout(() => stopRecording(), 12e4);
     controls();
   } catch (err) {
-    stopRecording(true);
-    error(`\u65E0\u6CD5\u5F55\u5236\uFF1A${err.message}`);
+    if (request === recordingRequest) {
+      stopRecording(true);
+      error(`\u65E0\u6CD5\u5F55\u5236\uFF1A${err.message}`);
+    }
+  } finally {
+    if (request === recordingRequest) requestingMedia = false;
+    controls();
   }
 }
 function stopRecording(discard = false) {
+  recordingRequest++;
+  requestingMedia = false;
   clearTimeout(recordingTimer);
   if (recorder) {
     recorder.discard = discard;
