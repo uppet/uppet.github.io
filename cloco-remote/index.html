@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src wss: ws://127.0.0.1:* ws://localhost:*; img-src 'self' blob:; media-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Cloco 远程工作台</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./">cloco<span>远程工作台</span></a>
+    <span id="connection-status" role="status" aria-live="polite">未连接</span>
+  </header>
+  <main class="workspace">
+    <aside id="sidebar" class="sidebar">
+      <section aria-labelledby="connect-heading">
+        <h1 id="connect-heading">连接你的电脑</h1>
+        <p class="hint">在电脑上启动 cloco，复制连接 token 到这里。</p>
+        <form id="connect-form">
+          <label for="token">连接 token</label>
+          <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="cloco1.…" required>
+          <label class="check"><input id="relay-only" type="checkbox">仅通过 TURN 中转连接</label>
+          <button id="connect" class="primary" type="submit">连接</button>
+          <button id="disconnect" type="button" hidden>断开连接</button>
+        </form>
+        <p id="project" class="project" hidden></p>
+        <button id="connection-settings-toggle" type="button" hidden>连接设置</button>
+      </section>
+      <section id="session-panel" aria-labelledby="session-heading" hidden>
+        <h2 id="session-heading">会话</h2>
+        <label class="sr-only" for="sessions">选择会话</label>
+        <select id="sessions"></select>
+        <button id="new-session" type="button">新建会话</button>
+        <p class="hint">任务在你的电脑执行。网页关闭后，正在执行的任务仍会继续。</p>
+      </section>
+      <div class="sidebar-footer">代码与模型密钥留在你的电脑。</div>
+    </aside>
+    <section class="conversation" aria-label="远程对话">
+      <div class="conversation-title"><h2 id="conversation-name">准备开始</h2><button id="load-history" type="button" hidden>加载更早消息</button></div>
+      <div id="messages" role="log" aria-label="会话消息" aria-live="polite">
+        <div id="empty-state" class="empty-state"><div class="empty-symbol" aria-hidden="true">⌘</div><h2>把工作接着做下去</h2><p>连接后可以发起任务，附上图片、语音或视频。<br>执行进度和结果会显示在这里。</p></div>
+      </div>
+      <div id="error" class="error" role="alert" hidden></div>
+      <form id="composer">
+        <div id="attachments" class="attachments" aria-label="待发送附件"></div>
+        <label class="sr-only" for="prompt">任务内容</label>
+        <textarea id="prompt" rows="3" placeholder="告诉 cloco 要做什么…" maxlength="30000" disabled></textarea>
+        <div class="composer-toolbar">
+          <div class="media-controls">
+            <button id="add-file" type="button" disabled>添加附件</button>
+            <input id="file" type="file" accept="image/*,audio/*,video/*,.txt,.md,.json,.pdf" multiple hidden>
+            <button id="record-audio" type="button" disabled>录音</button>
+            <button id="record-video" type="button" disabled>录制视频</button>
+            <button id="stop-recording" type="button" hidden>结束录制</button>
+          </div>
+          <div class="send-controls"><span id="upload-status" role="status"></span><button id="cancel" type="button" hidden>停止任务</button><button id="send" class="primary" type="submit" disabled>发送</button></div>
+        </div>
+        <video id="camera-preview" autoplay muted playsinline hidden></video>
+        <p class="composer-note">Enter 发送，Shift + Enter 换行。音频理解需要主机配置转写；视频按帧分析。</p>
+      </form>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
