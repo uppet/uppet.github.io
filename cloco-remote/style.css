@@ -10,4 +10,5 @@
 @media(prefers-reduced-motion:reduce){#messages{scroll-behavior:auto}}
 #connection-settings-toggle{display:none}
 .attachments{max-height:min(220px,30dvh);overflow-y:auto}
+@media(max-width:800px){.workspace{grid-template-rows:auto minmax(0,1fr)}}
 @media(max-width:800px){.sidebar.connected:not(.expanded) #connect-heading,.sidebar.connected:not(.expanded) section:first-child>.hint,.sidebar.connected:not(.expanded) #connect-form{display:none}.sidebar.connected .project{display:inline-block;margin:0;max-width:calc(100% - 88px)}.sidebar.connected #connection-settings-toggle{display:inline-block;float:right;padding:5px 8px;font-size:12px}.sidebar.connected{padding-top:10px;padding-bottom:10px}.sidebar.connected #session-panel{clear:both}}
